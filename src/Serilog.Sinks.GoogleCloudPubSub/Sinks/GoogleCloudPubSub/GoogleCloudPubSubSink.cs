@@ -11,17 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 using System;
 using Serilog.Sinks.PeriodicBatching;
+using Google.Apis.Pubsub.v1;
+using Google.Apis.Pubsub.v1.Data;
+using Google.Apis.Services;
 
 namespace Serilog.Sinks.GoogleCloudPubSub
 {
+   
     /// <summary>
     /// Writes log events as records to an Google Cloud Pub Sub.
     /// </summary>
     public class GoogleCloudPubSubSink : PeriodicBatchingSink
     {
+       private readonly PubsubService _pubsub;
+
         /// <summary>
         /// Construct a sink that saves logs to the specified Google PubSub account.
         /// </summary>
@@ -33,6 +38,10 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         {
              if (batchSizeLimit < 1 )
                 throw new ArgumentException("batchSizeLimit must be between > 1 for Google Cloud Pub Sub");
+        
+             _pubsub = new PubsubService();
+        
         }
     }
+
 }
