@@ -61,3 +61,8 @@
 #*.PDF   diff=astextplain
 #*.rtf   diff=astextplain
 #*.RTF   diff=astextplain
+
+###############################################################################
+# Not merge Build.ps1 (Nuget package is created different)
+################################################################################
+Build.ps1 merge=ours
