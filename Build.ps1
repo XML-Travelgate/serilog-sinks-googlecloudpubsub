@@ -5,7 +5,7 @@ if(Test-Path .\artifacts) {
     Remove-Item .\artifacts -Force -Recurse 
 }
 
-& dotnet restore --no-cache
+& dotnet restore
 
 $branch = @{ $true = $env:APPVEYOR_REPO_BRANCH; $false = $(git symbolic-ref --short -q HEAD) }[$env:APPVEYOR_REPO_BRANCH -ne $NULL];
 $revision = @{ $true = "{0:00000}" -f [convert]::ToInt32("0" + $env:APPVEYOR_BUILD_NUMBER, 10); $false = "local" }[$env:APPVEYOR_BUILD_NUMBER -ne $NULL];
@@ -13,16 +13,15 @@ $suffix = @{ $true = ""; $false = "$($branch.Substring(0, [math]::Min(10,$branch
 
 echo "build: Version suffix is $suffix"
 
-foreach ($src in ls src/Serilog.*) {
-    Push-Location $src
+Push-Location src/Serilog.Sinks.GoogleCloudPubSub
 
     echo "build: Packaging project in $src"
 
     & dotnet pack -c Release -o ..\..\.\artifacts --version-suffix=$suffix
     if($LASTEXITCODE -ne 0) { exit 1 }    
 
-    Pop-Location
-}
+Pop-Location
+Push-Location test/Serilog.Sinks.GoogleCloudPubSub
 
 foreach ($test in ls test/Serilog.*.Tests) {
     Push-Location $test
@@ -35,4 +34,5 @@ foreach ($test in ls test/Serilog.*.Tests) {
     Pop-Location
 }
 
+Pop-Location
 Pop-Location
