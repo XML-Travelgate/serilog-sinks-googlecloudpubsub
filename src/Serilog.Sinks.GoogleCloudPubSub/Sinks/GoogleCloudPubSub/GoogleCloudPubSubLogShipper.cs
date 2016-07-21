@@ -13,8 +13,14 @@
 // limitations under the License.
 
 using System;
+using System.Text;
 using System.IO;
+using System.Linq;
 using System.Threading;
+using Serilog.Debugging;
+using Google.Pubsub.V1;
+using System.Collections.Generic;
+using Google.Protobuf;
 
 namespace Serilog.Sinks.GoogleCloudPubSub
 {
@@ -30,6 +36,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         readonly object _stateLock = new object();
         volatile bool _unloading;
 
+ 
         internal GoogleCloudPubSubLogShipper(GoogleCloudPubSubSinkState state)
         {
             _state = state;
@@ -101,9 +108,191 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
         void OnTick()
         {
-            
+             try
+            {
+                var count = 0;
+
+                do
+                {
+                    // Locking the bookmark ensures that though there may be multiple instances of this
+                    // class running, only one will ship logs at a time.
+                    using (var bookmark = System.IO.File.Open(_bookmarkFilename, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read))
+                    {
+                        long nextLineBeginsAtOffset;
+                        string currentFilePath;
+
+                        TryReadBookmark(bookmark, out nextLineBeginsAtOffset, out currentFilePath);
+
+                        var fileSet = GetFileSet();
+
+                        if (currentFilePath == null || !System.IO.File.Exists(currentFilePath))
+                        {
+                            nextLineBeginsAtOffset = 0;
+                            currentFilePath = fileSet.FirstOrDefault();
+                        }
+
+                        if (currentFilePath == null) continue;
+
+                        count = 0;
+
+                        // file name pattern: whatever-bla-bla-20150218.json, whatever-bla-bla-20150218_1.json, etc.
+                        var lastToken = currentFilePath.Split('-').Last();
+
+                        // lastToken should be something like 20150218.json or 20150218_3.json now
+                        if (!lastToken.ToLowerInvariant().EndsWith(".json"))
+                        {
+                            throw new FormatException(string.Format("The file name '{0}' does not seem to follow the right file pattern - it must be named [whatever]-{{Date}}[_n].json", Path.GetFileName(currentFilePath)));
+                        }
+
+                      //  var dateString = lastToken.Substring(0, 8);
+                      //  var date = DateTime.ParseExact(dateString, "yyyyMMdd", CultureInfo.InvariantCulture);
+                      //  var indexName = _state.GetIndexForEvent(null, date);
+                         var payload = new List<PubsubMessage>();
+                        using (var current = System.IO.File.Open(currentFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                        {
+                            current.Position = nextLineBeginsAtOffset;
+
+                            string nextLine;
+                            while (count < _batchSizeLimit && TryReadLine(current, ref nextLineBeginsAtOffset, out nextLine))
+                            {
+                                var action = new { index = new { _index = indexName, _type = _state.Options.TypeName } };
+                                var actionJson = _state.Serialize(action);
+                                payload.Add(actionJson);
+                                payload.Add(nextLine);
+                                ++count;
+                            }
+                        }
+
+                        if (count > 0)
+                        {
+                            var response = _state.Client.Bulk<DynamicResponse>(payload);
+
+                            if (response.Success)
+                            {
+                                WriteBookmark(bookmark, nextLineBeginsAtOffset, currentFilePath);
+                                _connectionSchedule.MarkSuccess();
+                            }
+                            else
+                            {
+                                _connectionSchedule.MarkFailure();
+                                SelfLog.WriteLine("Received failed ElasticSearch shipping result {0}: {1}", response.HttpStatusCode, response.OriginalException);
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            // For whatever reason, there's nothing waiting to send. This means we should try connecting again at the
+                            // regular interval, so mark the attempt as successful.
+                            _connectionSchedule.MarkSuccess();
+
+                            // Only advance the bookmark if no other process has the
+                            // current file locked, and its length is as we found it.
+
+                            if (fileSet.Length == 2 && fileSet.First() == currentFilePath && IsUnlockedAtLength(currentFilePath, nextLineBeginsAtOffset))
+                            {
+                                WriteBookmark(bookmark, 0, fileSet[1]);
+                            }
+
+                            if (fileSet.Length > 2)
+                            {
+                                // Once there's a third file waiting to ship, we do our
+                                // best to move on, though a lock on the current file
+                                // will delay this.
+
+                                System.IO.File.Delete(fileSet[0]);
+                            }
+                        }
+                    }
+                }
+                while (count == _batchSizeLimit);
+            }
+            catch (Exception ex)
+            {
+                SelfLog.WriteLine("Exception while emitting periodic batch from {0}: {1}", this, ex);
+                _connectionSchedule.MarkFailure();
+            }
+            finally
+            {
+                lock (_stateLock)
+                {
+                    if (!_unloading)
+                    {
+                        SetTimer();
+                    }
+                }
+            }
         }
     
+        static void WriteBookmark(FileStream bookmark, long nextLineBeginsAtOffset, string currentFile)
+        {
+            using (var writer = new StreamWriter(bookmark))
+            {
+                writer.WriteLine($"{0}:::{1}", nextLineBeginsAtOffset, currentFile);
+            }
+        }
+
+      static bool TryReadLine(Stream current, ref long nextStart, out string nextLine)
+        {
+            var includesBom = nextStart == 0;
+
+            if (current.Length <= nextStart)
+            {
+                nextLine = null;
+                return false;
+            }
+
+            current.Position = nextStart;
+
+            // Important not to dispose this StreamReader as the stream must remain open (and we can't use the overload with 'leaveOpen' as it's not available in .NET4
+            var reader = new StreamReader(current, Encoding.UTF8, false, 128);
+            nextLine = reader.ReadLine();
+
+            if (nextLine == null)
+                return false;
+
+            nextStart += Encoding.UTF8.GetByteCount(nextLine) + Encoding.UTF8.GetByteCount(Environment.NewLine);
+            if (includesBom)
+                nextStart += 3;
+
+            return true;
+        }
+
+
+      static void TryReadBookmark(Stream bookmark, out long nextLineBeginsAtOffset, out string currentFile)
+        {
+            nextLineBeginsAtOffset = 0;
+            currentFile = null;
+
+            if (bookmark.Length != 0)
+            {
+                string current;
+
+                // Important not to dispose this StreamReader as the stream must remain open (and we can't use the overload with 'leaveOpen' as it's not available in .NET4
+                var reader = new StreamReader(bookmark, Encoding.UTF8, false, 128);
+                current = reader.ReadLine();
+
+                if (current != null)
+                {
+                    bookmark.Position = 0;
+                    var parts = current.Split(new[] { ":::" }, StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length == 2)
+                    {
+                        nextLineBeginsAtOffset = long.Parse(parts[0]);
+                        currentFile = parts[1];
+                    }
+                }
+
+            }
+        }
+
+        string[] GetFileSet()
+        {
+            return Directory.GetFiles(_logFolder, _candidateSearchPath)
+                .OrderBy(n => n)
+                .ToArray();
+        }
+
+
     }
 
         

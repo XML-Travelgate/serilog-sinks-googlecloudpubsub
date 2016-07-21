@@ -8,6 +8,13 @@ Branch  | AppVeyor
 dev | [![Build status](https://ci.appveyor.com/api/projects/status/afbwe9ssan2quind/branch/dev?svg=true)](https://ci.appveyor.com/project/operezfuentes/serilog-sinks-googlecloudpubsub/branch/dev) 
 master | [![Build status](https://ci.appveyor.com/api/projects/status/afbwe9ssan2quind/branch/master?svg=true)](https://ci.appveyor.com/project/operezfuentes/serilog-sinks-googlecloudpubsub/branch/master)
 
+# Implementation notes:
+
+- Based on https://github.com/serilog/serilog-sinks-seq and https://github.com/serilog/serilog-sinks-elasticsearch
+- Internally uses performing grpc communication via Google.Pubsub.V1
+- Durable (via RollingFile) and/or PeriodicBatching sink configuration
+
+# Notes 
 
 When using google-cloud-dotnet libraries elsewhere, you can do one of the following:
 
@@ -16,9 +23,3 @@ set GOOGLE_APPLICATION_CREDENTIALS=/path/to/my/key.json
 
 - If running locally for development/testing, you can authenticate using the Google Cloud SDK. Download the SDK if you haven't already, then login by running the following in the command line:
 gcloud auth login
-
-Implmentation notes:
-
-- Based on https://github.com/serilog/serilog-sinks-seq and https://github.com/serilog/serilog-sinks-elasticsearch
-- Internally uses performing grpc communication via Google.Pubsub.V1
-- Durable (via RollingFile) and/or PeriodicBatching sink configuration

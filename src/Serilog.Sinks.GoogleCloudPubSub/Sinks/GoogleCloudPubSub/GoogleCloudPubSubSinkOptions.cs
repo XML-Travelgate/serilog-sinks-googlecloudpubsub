@@ -69,6 +69,12 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         public TimeSpan? BufferLogShippingInterval { get; set; }
 
         /// <summary>
+        /// The interval between checking the buffer files
+        /// </summary>
+        public int? BufferRetainedFileCountLimit { get; set; }
+
+
+        /// <summary>
         /// Configures the  GoogleCloudPubSub sink defaults
         /// </summary>
         protected GoogleCloudPubSubSinkOptions()

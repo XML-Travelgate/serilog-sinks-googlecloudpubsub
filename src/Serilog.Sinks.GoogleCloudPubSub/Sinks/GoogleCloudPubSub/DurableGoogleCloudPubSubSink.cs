@@ -42,10 +42,11 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             }
 
            _sink = new RollingFileSink(
-                options.BufferBaseFilename + FileNameSuffix,
-                _state.DurableFormatter,
-                options.BufferFileSizeLimitBytes,
-                null);
+                    options.BufferBaseFilename + FileNameSuffix,
+                    _state.DurableFormatter,
+                    options.BufferFileSizeLimitBytes,
+                    options.BufferRetainedFileCountLimit
+                );
             
             _shipper = new GoogleCloudPubSubLogShipper(_state);
         }

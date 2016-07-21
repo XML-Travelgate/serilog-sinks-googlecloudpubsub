@@ -48,7 +48,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// not both.</remarks>
         protected override async Task EmitBatchAsync(IEnumerable<LogEvent> events)
         {
-            var payload = new List<PubsubMessage>();
+          var payload = new List<PubsubMessage>();
            foreach (var logEvent in events){
                  StringWriter sw = new StringWriter();
                  this._state.PeriodicBatchingFormatter.Format( logEvent,sw );
@@ -62,7 +62,6 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             }
 
            PublishResponse response = await  this._state.PublishAsync( payload );
-        
            //TODO: Check response to log errors 
             /*
            var publishResponse = await _pubsubService.Projects.Topics.Publish( publishRequest, _topicPath ).ExecuteAsync().ConfigureAwait(false);
