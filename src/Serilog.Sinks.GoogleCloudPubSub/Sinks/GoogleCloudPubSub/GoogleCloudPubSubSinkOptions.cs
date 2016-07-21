@@ -14,7 +14,6 @@
 // limitations under the License.
 
 using System;
-using Google.Apis.Pubsub.v1;
 using Serilog.Formatting;
 
 namespace Serilog.Sinks.GoogleCloudPubSub
@@ -26,14 +25,14 @@ namespace Serilog.Sinks.GoogleCloudPubSub
     {
 
         ///<summary>
-        /// GoogleCloudOubSub service client.
+        /// GoogleCloudOubSub project to publish.
         /// </summary>
-        public PubsubService PubsubService{get;set;}
+        public string ProjectId{get;set;}
 
         ///<summary>
         /// GoogleCloudOubSub topic to publish.
         /// </summary>
-        public string TopicPath{get;set;}
+        public string TopicId{get;set;}
 
         ///<summary>
         /// The maximum number of events to post in a single batch.
@@ -49,40 +48,36 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// Throw LoggingException if  error publishing messages
         /// </summary>  
         public bool ThrowPublishExceptions { get; set; }
-
-        ///<summary>
-        /// Supplies culture-specific formatting information, or null.
-        /// </summary>
-       public  IFormatProvider FormatProvider {get;set;}
-
-
         /// <summary>
         ///  Customizes the formatter used when converting log events into ElasticSearch documents. Please note that the formatter output must be valid JSON :)
         /// </summary>
         public ITextFormatter CustomFormatter { get; set; }
 
         /// <summary>
-        /// Configures the elasticsearch sink defaults
+        /// /// Optional path to directory that can be used as a log shipping buffer for increasing the reliability of the log forwarding.
+        /// </summary>
+        public string BufferBaseFilename { get; set; }
+
+        /// <summary>
+        /// The maximum size, in bytes, to which the buffer log file for a specific date will be allowed to grow. By default no limit will be applied.
+        /// </summary>
+        public long? BufferFileSizeLimitBytes { get; set; }
+
+        /// <summary>
+        /// The interval between checking the buffer files
+        /// </summary>
+        public TimeSpan? BufferLogShippingInterval { get; set; }
+
+        /// <summary>
+        /// Configures the  GoogleCloudPubSub sink defaults
         /// </summary>
         protected GoogleCloudPubSubSinkOptions()
         {
-            this.Period = TimeSpan.FromSeconds(1);
+            this.Period = TimeSpan.FromSeconds(10);
             this.BatchSizeLimit = 50;
             this.CustomFormatter = new GoogleCloudPubSubRawFormatter();
             this.ThrowPublishExceptions = true;
         }
 
-
-      /// <summary>
-        /// Configures the elasticsearch sink
-        /// </summary>
-        /// <param name="pubSubService">The pubSubService to use to write events to</param>
-        /// <param name="topicPath">The pubSub topic to use to write events to</param>
-        public GoogleCloudPubSubSinkOptions( PubsubService pubSubService, string topicPath)
-            : this()
-        {
-            PubsubService = pubSubService;
-            TopicPath = topicPath;
-        }
     }
 }

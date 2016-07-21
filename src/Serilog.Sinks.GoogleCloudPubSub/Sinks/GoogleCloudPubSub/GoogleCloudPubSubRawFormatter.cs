@@ -23,7 +23,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
     /// </summary>
     public class GoogleCloudPubSubRawFormatter : ITextFormatter
     {
-       /// <summary>
+        /// <summary>
         /// Format log events to GoogleCloudPubsub message format
         /// </summary>
         /// <param name="logEvent">Event to format</param>

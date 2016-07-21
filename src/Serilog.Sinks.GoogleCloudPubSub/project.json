@@ -1,9 +1,9 @@
 {
-  "version": "1.0.1-*",
+  "version": "2.0.0-*",
   "description": "The Google Cloud Pub/Sub Sink for Serilog",
   "authors": ["Oscar Pérez, XMLTravelgate Developer"],
   "packOptions": {
-    "tags": ["serilog","googlecloudpubsub","logging","event","collector"],
+    "tags": ["serilog","googlecloudpubsub","logging","event","collector","rolling","file"],
     "projectUrl": "https://github.com/XML-Travelgate/serilog-sinks-googlecloudpubsub",
     "licenseUrl": "http://www.apache.org/licenses/LICENSE-2.0",
     "iconUrl": "http://serilog.net/images/serilog-sink-nuget.png"
@@ -12,9 +12,12 @@
     "xmlDoc": true
   },
   "dependencies": {
+     "System.Collections":"4.0.11",
      "Serilog": "2.0.0",
      "Serilog.Sinks.PeriodicBatching": "2.0.0",
-     "Google.Apis.Pubsub.v1": "1.14.0.441"
+     "Serilog.Sinks.RollingFile":"2.1.0",
+     "Google.Pubsub.V1": "1.0.0-beta01",
+     "Google.Protobuf":"3.0.0-beta4"
   },
   "frameworks": { 
       "net461":{

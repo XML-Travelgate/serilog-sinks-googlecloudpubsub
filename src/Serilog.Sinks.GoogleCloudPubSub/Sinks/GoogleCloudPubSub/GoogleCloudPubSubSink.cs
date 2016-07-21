@@ -11,20 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
-
 using Serilog.Sinks.PeriodicBatching;
 using Serilog.Events;
-using Serilog.Formatting;
 using Serilog.Debugging;
-
-using Google.Apis.Pubsub.v1;
-using Google.Apis.Pubsub.v1.Data;
-
-
+using Google.Pubsub.V1;
+using Google.Protobuf;
 
 namespace Serilog.Sinks.GoogleCloudPubSub
 {
@@ -34,11 +28,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
     /// </summary>
     public class GoogleCloudPubSubSink : PeriodicBatchingSink
     {
-       private readonly PubsubService _pubsubService;
-       private readonly string _topicPath;
-       private readonly ITextFormatter _formatter;
-       private readonly bool _throwPublishExceptions;
-
+        private readonly GoogleCloudPubSubSinkState _state;
 
         /// <summary>
         /// Construct a sink that saves logs to the specified Google PubSub account.
@@ -47,14 +37,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         public GoogleCloudPubSubSink(GoogleCloudPubSubSinkOptions options )
             : base(options.BatchSizeLimit, options.Period)
         {
-            if (options.BatchSizeLimit < 1 ) throw new ArgumentException("batchSizeLimit must be between > 1 for Google Cloud Pub Sub");
-            if (options.PubsubService == null) throw new ArgumentNullException("Pubsubservice is null");
-         
-             _pubsubService = options.PubsubService;
-             _topicPath = options.TopicPath;
-             _throwPublishExceptions = options.ThrowPublishExceptions;
-
-             _formatter = options.CustomFormatter ?? new GoogleCloudPubSubRawFormatter();
+            _state = GoogleCloudPubSubSinkState.Create(options);
         }
 
        /// <summary>
@@ -65,20 +48,33 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// not both.</remarks>
         protected override async Task EmitBatchAsync(IEnumerable<LogEvent> events)
         {
-           PublishRequest publishRequest = new PublishRequest();
+            var payload = new List<PubsubMessage>();
            foreach (var logEvent in events){
-                 var sw = new StringWriter();
-                 this._formatter.Format( logEvent,sw ); 
-                 publishRequest.Messages.Add( new PubsubMessage(){ Data = sw.ToString() } );
+                 StringWriter sw = new StringWriter();
+                 this._state.PeriodicBatchingFormatter.Format( logEvent,sw );
+
+                payload.Add(
+                    new PubsubMessage{
+                        // The data is any arbitrary ByteString. Here, we're using text.
+                        Data = ByteString.CopyFromUtf8(sw.ToString())
+                    }
+                );
             }
+
+           PublishResponse response = await  this._state.PublishAsync( payload );
+        
+           //TODO: Check response to log errors 
+            /*
            var publishResponse = await _pubsubService.Projects.Topics.Publish( publishRequest, _topicPath ).ExecuteAsync().ConfigureAwait(false);
            if ( this._throwPublishExceptions ){
                if ( ( publishResponse.MessageIds == null) || ( publishResponse.MessageIds.Count != publishRequest.Messages.Count )){
                     throw new LoggingFailedException($"Received failed response. Messages requests {publishRequest.Messages.Count} responses {publishResponse.MessageIds.Count}");
                }
            }
+           */
+        
         }
-
+         
     }
 
 }
