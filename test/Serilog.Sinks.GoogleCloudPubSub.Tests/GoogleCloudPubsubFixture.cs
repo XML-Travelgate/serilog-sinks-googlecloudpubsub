@@ -33,14 +33,18 @@ namespace Serilog.Sinks.GoogleCloudPubSub.Tests
               Config = builder.Build();
 
               ProjectId = Config[ProjectEnvironmentVariable];
-              Console.WriteLine($"Using project {ProjectId}");
+              Console.WriteLine($"Using projectId [{ProjectId}]");
               if (string.IsNullOrEmpty(ProjectId))
               {
                 throw new InvalidOperationException($"Please set the {ProjectEnvironmentVariable} environment variable before running tests");
               }
 
-     var credentials = Config["GOOGLE_APPLICATION_CREDENTIALS"];
-            Console.WriteLine($"Cred {credentials}");
+            var credentials = Config["GOOGLE_APPLICATION_CREDENTIALS"];
+            if (string.IsNullOrEmpty(credentials))
+            {
+                Console.WriteLine($"Using credentials file [{credentials}]");
+            }
+            
 
          }
 
