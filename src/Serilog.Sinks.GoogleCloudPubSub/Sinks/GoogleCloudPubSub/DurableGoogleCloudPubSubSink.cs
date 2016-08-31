@@ -22,7 +22,6 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 {
      class DurableGoogleCloudPubSubSink : ILogEventSink, IDisposable
     {
-        
         // we rely on the date in the filename later!
         const string FileNameSuffix = "-{Date}.json";
         readonly RollingFileSink _sink;

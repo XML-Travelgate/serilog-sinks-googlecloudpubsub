@@ -8,7 +8,8 @@ Branch  | AppVeyor
 dev | [![Build status](https://ci.appveyor.com/api/projects/status/afbwe9ssan2quind/branch/dev?svg=true)](https://ci.appveyor.com/project/operezfuentes/serilog-sinks-googlecloudpubsub/branch/dev) 
 master | [![Build status](https://ci.appveyor.com/api/projects/status/afbwe9ssan2quind/branch/master?svg=true)](https://ci.appveyor.com/project/operezfuentes/serilog-sinks-googlecloudpubsub/branch/master)
 
-# Implementation notes:
+
+# Implementation notes
 
 - Based on https://github.com/serilog/serilog-sinks-seq and https://github.com/serilog/serilog-sinks-elasticsearch
 - Internally uses performing grpc communication via Google.Pubsub.V1

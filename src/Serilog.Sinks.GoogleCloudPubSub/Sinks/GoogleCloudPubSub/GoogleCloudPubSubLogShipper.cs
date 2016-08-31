@@ -14,6 +14,7 @@
 
 using System;
 using System.Text;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -144,10 +145,12 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                             throw new FormatException(string.Format("The file name '{0}' does not seem to follow the right file pattern - it must be named [whatever]-{{Date}}[_n].json", Path.GetFileName(currentFilePath)));
                         }
 
-                      //  var dateString = lastToken.Substring(0, 8);
-                      //  var date = DateTime.ParseExact(dateString, "yyyyMMdd", CultureInfo.InvariantCulture);
-                      //  var indexName = _state.GetIndexForEvent(null, date);
-                         var payload = new List<PubsubMessage>();
+                        var dateString = lastToken.Substring(0, 8);
+                        var date = DateTime.ParseExact(dateString, "yyyyMMdd", CultureInfo.InvariantCulture);
+                     //   var indexName = _state.GetIndexForEvent(null, date);
+                        
+                        var payload = new List<PubsubMessage>();
+                        
                         using (var current = System.IO.File.Open(currentFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                         {
                             current.Position = nextLineBeginsAtOffset;
@@ -155,19 +158,20 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                             string nextLine;
                             while (count < _batchSizeLimit && TryReadLine(current, ref nextLineBeginsAtOffset, out nextLine))
                             {
-                                var action = new { index = new { _index = indexName, _type = _state.Options.TypeName } };
-                                var actionJson = _state.Serialize(action);
-                                payload.Add(actionJson);
-                                payload.Add(nextLine);
+                       //         var action = new { index = new { _index = indexName, _type = _state.Options.TypeName } };
+                         //       var actionJson = _state.Serialize(action);
+                           //     payload.Add(actionJson);
+                            //    payload.Add(nextLine);
                                 ++count;
                             }
                         }
 
                         if (count > 0)
                         {
-                            var response = _state.Client.Bulk<DynamicResponse>(payload);
-
+                          /*var response = _state.Client.Bulk<DynamicResponse>(payload);
+                
                             if (response.Success)
+                            if true
                             {
                                 WriteBookmark(bookmark, nextLineBeginsAtOffset, currentFilePath);
                                 _connectionSchedule.MarkSuccess();
@@ -178,6 +182,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                                 SelfLog.WriteLine("Received failed ElasticSearch shipping result {0}: {1}", response.HttpStatusCode, response.OriginalException);
                                 break;
                             }
+                            */
                         }
                         else
                         {
@@ -187,12 +192,12 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
                             // Only advance the bookmark if no other process has the
                             // current file locked, and its length is as we found it.
-
+                            /*    
                             if (fileSet.Length == 2 && fileSet.First() == currentFilePath && IsUnlockedAtLength(currentFilePath, nextLineBeginsAtOffset))
                             {
                                 WriteBookmark(bookmark, 0, fileSet[1]);
                             }
-
+                            */
                             if (fileSet.Length > 2)
                             {
                                 // Once there's a third file waiting to ship, we do our
