@@ -22,11 +22,18 @@ using Serilog.Debugging;
 using Google.Pubsub.V1;
 using System.Collections.Generic;
 using Google.Protobuf;
+using System.Runtime.InteropServices;
 
 namespace Serilog.Sinks.GoogleCloudPubSub
 {
     class GoogleCloudPubSubLogShipper : IDisposable
     {
+
+        //*******************************************************************
+        //      PRIVATE FIELDS
+        //*******************************************************************
+
+        #region
         private readonly GoogleCloudPubSubSinkState _state;
         readonly int _batchSizeLimit;
         readonly Timer _timer;
@@ -36,25 +43,39 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         readonly string _candidateSearchPath;
         readonly object _stateLock = new object();
         volatile bool _unloading;
+        #endregion
 
- 
+
+
+        //*******************************************************************
+        //      CONSTRUCTOR
+        //*******************************************************************
+
+        #region
         internal GoogleCloudPubSubLogShipper(GoogleCloudPubSubSinkState state)
         {
-            _state = state;
-            _connectionSchedule = new ExponentialBackoffConnectionSchedule( _state.Options.BufferLogShippingInterval.Value );    
-            _batchSizeLimit = _state.Options.BatchSizeLimit;
-            _bookmarkFilename = Path.GetFullPath(_state.Options.BufferBaseFilename + ".bookmark");
-            _logFolder = Path.GetDirectoryName(_bookmarkFilename);
-            _candidateSearchPath = Path.GetFileName(_state.Options.BufferBaseFilename) + "*.json";
+            this._state = state;
+            this._connectionSchedule = new ExponentialBackoffConnectionSchedule(this._state.Options.BufferLogShippingInterval.Value );
+            this._batchSizeLimit = this._state.Options.BatchSizeLimit;
+            this._bookmarkFilename = Path.GetFullPath(this._state.Options.BufferBaseFilename + ".bookmark");
+            this._logFolder = Path.GetDirectoryName(this._bookmarkFilename);
+            this._candidateSearchPath = Path.GetFileName(this._state.Options.BufferBaseFilename) + "*" + this._state.Options.BufferFileExtension;
 
-             _timer = new Timer(s => OnTick());
+            this._timer = new Timer(s => OnTick());
             
             AppDomain.CurrentDomain.DomainUnload += OnAppDomainUnloading;
             AppDomain.CurrentDomain.ProcessExit += OnAppDomainUnloading;
 
             SetTimer();
-        }    
+        }
+        #endregion
 
+
+        //*******************************************************************
+        //      
+        //*******************************************************************
+
+        #region
         void OnAppDomainUnloading(object sender, EventArgs args)
         {
             CloseAndFlush();
@@ -62,51 +83,40 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
         void CloseAndFlush()
         {
-            lock (_stateLock)
+            lock (this._stateLock)
             {
-                if (_unloading)
+                if (this._unloading)
                     return;
 
-                _unloading = true;
+                this._unloading = true;
             }
 
             AppDomain.CurrentDomain.DomainUnload -= OnAppDomainUnloading;
             AppDomain.CurrentDomain.ProcessExit -= OnAppDomainUnloading;
 
             var wh = new ManualResetEvent(false);
-            if (_timer.Dispose(wh))
+            if (this._timer.Dispose(wh))
                 wh.WaitOne();
 
             OnTick();
-        }
-    
-        /// <summary>
-        /// /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
-        /// </summary>
-        /// <filterpriority>2</filterpriority>
-        public void Dispose()
-        {
-            Dispose(true);
-        }
-
-         /// <summary>
-        /// Free resources held by the sink.
-        /// </summary>
-        /// <param name="disposing">If true, called because the object is being disposed; if false,
-        /// the object is being disposed from the finalizer.</param>
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!disposing) return;
-            CloseAndFlush();
         }
 
         void SetTimer()
         {
             // Note, called under _stateLock
             var infiniteTimespan = Timeout.InfiniteTimeSpan;
-            _timer.Change(_connectionSchedule.NextInterval, infiniteTimespan);
+            this._timer.Change(this._connectionSchedule.NextInterval, infiniteTimespan);
         }
+        #endregion
 
+
+
+
+        //*******************************************************************
+        //      OnTick : MAIN FUNCTIONALITY (send data)
+        //*******************************************************************
+
+        #region
         void OnTick()
         {
              try
@@ -117,87 +127,108 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                 {
                     // Locking the bookmark ensures that though there may be multiple instances of this
                     // class running, only one will ship logs at a time.
-                    using (var bookmark = System.IO.File.Open(_bookmarkFilename, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read))
+                    using (var bookmark = System.IO.File.Open(this._bookmarkFilename, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read))
                     {
-                        long nextLineBeginsAtOffset;
-                        string currentFilePath;
 
+
+                        //--- 1st step : identify the current buffer file and position to read from --------------------------------------------
+
+                        long nextLineBeginsAtOffset;    // Current position to read in the current buffer file.
+                        string currentFilePath;         // Current buffer file path with data to read and send.
+
+                        // NOTE: 
+                        //      Data is recovered from one buffer file each time onTick is executed.
+
+                        // We read the bookmark to know from which file/position continue reading for the last processed file...
                         TryReadBookmark(bookmark, out nextLineBeginsAtOffset, out currentFilePath);
 
-                        var fileSet = GetFileSet();
+                        // Candidate buffer files (in the working folder): all and ordered by name to have a sequence of treatment.
+                        string[] fileSet = GetFileSet();
 
+                        // We don't have a bookmark or it is not pointing to an existing file...
                         if (currentFilePath == null || !System.IO.File.Exists(currentFilePath))
                         {
+                            // We get the first file of the set and at the zero position.
                             nextLineBeginsAtOffset = 0;
                             currentFilePath = fileSet.FirstOrDefault();
                         }
 
+                        // Anyway, we don't have a buffer file to read from, so we exit without sending data neither updating the bookmark.
                         if (currentFilePath == null) continue;
 
+                        //--- File date recovery and file extension validation ---
+                        // file name pattern: whatever-xxx-xxx-{date}.{ext}, whatever-xxx-xxx-{date}_1.{ext}, etc.
+                        // lastToken should be something like {date}.{ext} or {date}_1.{ext} now
+                        string lastToken = currentFilePath.Split('-').Last();                       
+                        if (!lastToken.ToLowerInvariant().EndsWith(this._state.Options.BufferFileExtension))
+                        {
+                            throw new FormatException(string.Format("The file name '{0}' does not seem to follow the right file pattern - it must be named [whatever]-{{Date}}[_n].{extension}", Path.GetFileName(currentFilePath)));
+                        }
+                        string dateString = lastToken.Substring(0, 8);
+                        DateTime date = DateTime.ParseExact(dateString, "yyyyMMdd", CultureInfo.InvariantCulture);
+
+
+
+
+                        //--- 2nd step : read current buffer file and position ------------------------------------------------------
+
+                        List<string> payloadStr = new List<string>();
                         count = 0;
 
-                        // file name pattern: whatever-bla-bla-20150218.json, whatever-bla-bla-20150218_1.json, etc.
-                        var lastToken = currentFilePath.Split('-').Last();
-
-                        // lastToken should be something like 20150218.json or 20150218_3.json now
-                        if (!lastToken.ToLowerInvariant().EndsWith(".json"))
-                        {
-                            throw new FormatException(string.Format("The file name '{0}' does not seem to follow the right file pattern - it must be named [whatever]-{{Date}}[_n].json", Path.GetFileName(currentFilePath)));
-                        }
-
-                        var dateString = lastToken.Substring(0, 8);
-                        var date = DateTime.ParseExact(dateString, "yyyyMMdd", CultureInfo.InvariantCulture);
-                     //   var indexName = _state.GetIndexForEvent(null, date);
-                        
-                        var payload = new List<PubsubMessage>();
-                        
                         using (var current = System.IO.File.Open(currentFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                         {
                             current.Position = nextLineBeginsAtOffset;
 
                             string nextLine;
-                            while (count < _batchSizeLimit && TryReadLine(current, ref nextLineBeginsAtOffset, out nextLine))
+                            while (count < this._batchSizeLimit && TryReadLine(current, ref nextLineBeginsAtOffset, out nextLine))
                             {
-                       //         var action = new { index = new { _index = indexName, _type = _state.Options.TypeName } };
-                         //       var actionJson = _state.Serialize(action);
-                           //     payload.Add(actionJson);
-                            //    payload.Add(nextLine);
+                                payloadStr.Add(nextLine);
                                 ++count;
                             }
                         }
 
+
+
+                        //--- 3rd step : send data (if we have any) and update bookmark ------------------------------------------------------
+
+                        // Do we have data to send?
                         if (count > 0)
                         {
-                          /*var response = _state.Client.Bulk<DynamicResponse>(payload);
-                
+                            // ...yes, we have data, so come on...
+
+                            //--- Sending data to Google PubSub... ------------
+                            GoogleCloudPubSubClientResponse response = this._state.Publish(payloadStr);
+                            //-----------------------------------------------
+
                             if (response.Success)
-                            if true
                             {
+                                //--- OK ---
                                 WriteBookmark(bookmark, nextLineBeginsAtOffset, currentFilePath);
-                                _connectionSchedule.MarkSuccess();
+                                this._connectionSchedule.MarkSuccess();
                             }
                             else
                             {
-                                _connectionSchedule.MarkFailure();
-                                SelfLog.WriteLine("Received failed ElasticSearch shipping result {0}: {1}", response.HttpStatusCode, response.OriginalException);
+                                //--- ERROR ---
+                                this._connectionSchedule.MarkFailure();
+                                SelfLog.WriteLine("Received failed GoogleCloudPubSub shipping result : {0}", response.ErrorMessage);
                                 break;
                             }
-                            */
+                           
                         }
                         else
                         {
+                            // ...no, we don't have data, but may be there is another buffer file waiting with data to be sent...
+
                             // For whatever reason, there's nothing waiting to send. This means we should try connecting again at the
                             // regular interval, so mark the attempt as successful.
-                            _connectionSchedule.MarkSuccess();
+                            this._connectionSchedule.MarkSuccess();
 
                             // Only advance the bookmark if no other process has the
-                            // current file locked, and its length is as we found it.
-                            /*    
+                            // current file locked, and its length is as we found it.   
                             if (fileSet.Length == 2 && fileSet.First() == currentFilePath && IsUnlockedAtLength(currentFilePath, nextLineBeginsAtOffset))
                             {
                                 WriteBookmark(bookmark, 0, fileSet[1]);
                             }
-                            */
                             if (fileSet.Length > 2)
                             {
                                 // Once there's a third file waiting to ship, we do our
@@ -209,30 +240,65 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                         }
                     }
                 }
-                while (count == _batchSizeLimit);
+                while (count == this._batchSizeLimit);
             }
             catch (Exception ex)
             {
                 SelfLog.WriteLine("Exception while emitting periodic batch from {0}: {1}", this, ex);
-                _connectionSchedule.MarkFailure();
+                this._connectionSchedule.MarkFailure();
             }
             finally
             {
-                lock (_stateLock)
+                lock (this._stateLock)
                 {
-                    if (!_unloading)
+                    if (!this._unloading)
                     {
                         SetTimer();
                     }
                 }
             }
         }
-    
+        #endregion
+
+
+
+
+        //*******************************************************************
+        //      FILES MANAGEMENT FUNCTIONS
+        //*******************************************************************
+
+        #region
+
+        static bool IsUnlockedAtLength(string file, long maxLen)
+        {
+            try
+            {
+                using (var fileStream = System.IO.File.Open(file, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read))
+                {
+                    return fileStream.Length <= maxLen;
+                }
+            }
+            catch (IOException ex)
+            {
+                var errorCode = Marshal.GetHRForException(ex) & ((1 << 16) - 1);
+                if (errorCode != 32 && errorCode != 33)
+                {
+                    SelfLog.WriteLine("Unexpected I/O exception while testing locked status of {0}: {1}", file, ex);
+                }
+            }
+            catch (Exception ex)
+            {
+                SelfLog.WriteLine("Unexpected exception while testing locked status of {0}: {1}", file, ex);
+            }
+
+            return false;
+        }
+
         static void WriteBookmark(FileStream bookmark, long nextLineBeginsAtOffset, string currentFile)
         {
             using (var writer = new StreamWriter(bookmark))
             {
-                writer.WriteLine($"{0}:::{1}", nextLineBeginsAtOffset, currentFile);
+                writer.WriteLine("{0}:::{1}", nextLineBeginsAtOffset, currentFile);
             }
         }
 
@@ -292,14 +358,45 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
         string[] GetFileSet()
         {
-            return Directory.GetFiles(_logFolder, _candidateSearchPath)
+            return Directory.GetFiles(this._logFolder, this._candidateSearchPath)
                 .OrderBy(n => n)
                 .ToArray();
         }
+        #endregion
+
+
+
+        //*******************************************************************
+        //      IDisposable
+        //*******************************************************************
+
+        #region
+        /// <summary>
+        /// /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
+        /// </summary>
+        /// <filterpriority>2</filterpriority>
+        public void Dispose()
+        {
+            Dispose(true);
+        }
+
+        /// <summary>
+        /// Free resources held by the sink.
+        /// </summary>
+        /// <param name="disposing">If true, called because the object is being disposed; if false,
+        /// the object is being disposed from the finalizer.</param>
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposing) return;
+            CloseAndFlush();
+        }
+        #endregion
 
 
     }
 
         
+
+
 
 }

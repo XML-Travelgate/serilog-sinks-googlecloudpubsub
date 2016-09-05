@@ -19,10 +19,16 @@ using Serilog.Events;
 namespace Serilog.Sinks.GoogleCloudPubSub
 {
     /// <summary>
-    /// A RawFormatter  which plays nice with PubsubMessage 
+    /// A RawFormatter which plays nice with PubsubMessage 
     /// </summary>
     public class GoogleCloudPubSubRawFormatter : ITextFormatter
     {
+
+        //*******************************************************************
+        //      ITextFormatter
+        //*******************************************************************
+
+        #region
         /// <summary>
         /// Format log events to GoogleCloudPubsub message format
         /// </summary>
@@ -30,10 +36,12 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// <param name="output">Output to write event</param>
         public void Format(LogEvent logEvent, TextWriter output)
         {
-            logEvent.RenderMessage(output);
+            // This method is executed each time a log event has to be stored (into memory, into the buffer file, ...)
+            // In this development data is stored as raw data: no format is given.
+            // Each log is stored in a separate line.
+            output.WriteLine(logEvent.MessageTemplate.Text);
         }
-
-        
+        #endregion
     }
 
 }

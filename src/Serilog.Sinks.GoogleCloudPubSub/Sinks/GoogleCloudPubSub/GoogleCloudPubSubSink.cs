@@ -24,12 +24,34 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 {
    
     /// <summary>
-    /// Writes log events as records to an Google Cloud Pub Sub.
+    /// Writes log events as records to a Google Cloud Pub Sub.
     /// </summary>
     public class GoogleCloudPubSubSink : PeriodicBatchingSink
     {
-        private readonly GoogleCloudPubSubSinkState _state;
+        //***TODO***
+        // NOTE : 
+        //  This class is not finished.
+        //  At this version we just support a durable sink !!!!
+        //***TODO***
 
+
+        //*******************************************************************
+        //      PRIVATE FIELDS
+        //*******************************************************************
+
+        #region
+        private readonly GoogleCloudPubSubSinkState _state;
+        #endregion  
+
+
+
+
+
+        //*******************************************************************
+        //      CONSTRUCTOR
+        //*******************************************************************
+
+        #region
         /// <summary>
         /// Construct a sink that saves logs to the specified Google PubSub account.
         /// </summary>
@@ -37,10 +59,19 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         public GoogleCloudPubSubSink(GoogleCloudPubSubSinkOptions options )
             : base(options.BatchSizeLimit, options.Period)
         {
-            _state = GoogleCloudPubSubSinkState.Create(options);
+            this._state = GoogleCloudPubSubSinkState.Create(options);
         }
+        #endregion
 
-       /// <summary>
+
+
+
+        //*******************************************************************
+        //      FUNCTIONS
+        //*******************************************************************
+
+        #region
+        /// <summary>
         /// Emit a batch of log events, running to completion synchronously.
         /// </summary>
         /// <param name="events">The events to emit.</param>
@@ -48,8 +79,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// not both.</remarks>
         protected override async Task EmitBatchAsync(IEnumerable<LogEvent> events)
         {
-          var payload = new List<PubsubMessage>();
-           foreach (var logEvent in events){
+            var payload = new List<PubsubMessage>();
+            foreach (var logEvent in events){
                  StringWriter sw = new StringWriter();
                  this._state.PeriodicBatchingFormatter.Format( logEvent,sw );
 
@@ -61,7 +92,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                 );
             }
 
-           PublishResponse response = await  this._state.PublishAsync( payload );
+            GoogleCloudPubSubClientResponse response = await  this._state.PublishAsync(payload);
            //TODO: Check response to log errors 
             /*
            var publishResponse = await _pubsubService.Projects.Topics.Publish( publishRequest, _topicPath ).ExecuteAsync().ConfigureAwait(false);
@@ -73,7 +104,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
            */
         
         }
-         
+        #endregion
+
     }
 
 }

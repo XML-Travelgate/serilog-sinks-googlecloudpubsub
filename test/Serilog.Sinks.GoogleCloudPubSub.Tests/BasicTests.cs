@@ -43,34 +43,34 @@ namespace Serilog.Sinks.GoogleCloudPubSub.Tests
             // End snippet
         }
         
-        [Fact]
-        public void GooglePubsubCheck()
-        {
-         string projectId = this._fixture.Config["PubsubProjectId"];
-         string topicId = this._fixture.Config["PubsubTopicId"];
-         string subId = this._fixture.Config["PubsubSubId"];
-         _output.WriteLine($"Using [{projectId}],[{topicId}],[{subId}]]");
+        
+        //public void GooglePubsubCheck()
+        //{
+        // string projectId = this._fixture.Config["PubsubProjectId"];
+        // string topicId = this._fixture.Config["PubsubTopicId"];
+        // string subId = this._fixture.Config["PubsubSubId"];
+        // _output.WriteLine($"Using [{projectId}],[{topicId}],[{subId}]]");
 
-          //Test Google.Pubsub.V1 library  
-          //PublisherClient publisher = PublisherClient.Create();
-          //string topicName = PublisherClient.FormatTopicName(projectId,topicId);
-
-
-          // Subscribe to the topic.
-          SubscriberClient subscriber = SubscriberClient.Create();
-          string subscriptionName = SubscriberClient.FormatSubscriptionName(projectId, subId);
-          subscriber.CreateSubscription(subscriptionName, subId, pushConfig: null, ackDeadlineSeconds: 60);
-
-          PullResponse response = subscriber.Pull(subscriptionName, returnImmediately: true, maxMessages: 10);
-            foreach (ReceivedMessage received in response.ReceivedMessages)
-            {
-                    PubsubMessage msg = received.Message;
-                    Console.WriteLine($"Received message {msg.MessageId} published at {msg.PublishTime.ToDateTime()}");
-                    Console.WriteLine($"Text: '{msg.Data.ToStringUtf8()}'");
-            }
+        //  //Test Google.Pubsub.V1 library  
+        //  //PublisherClient publisher = PublisherClient.Create();
+        //  //string topicName = PublisherClient.FormatTopicName(projectId,topicId);
 
 
-        }
+        //  // Subscribe to the topic.
+        //  SubscriberClient subscriber = SubscriberClient.Create();
+        //  string subscriptionName = SubscriberClient.FormatSubscriptionName(projectId, subId);
+        //  subscriber.CreateSubscription(subscriptionName, subId, pushConfig: null, ackDeadlineSeconds: 60);
+
+        //  PullResponse response = subscriber.Pull(subscriptionName, returnImmediately: true, maxMessages: 10);
+        //    foreach (ReceivedMessage received in response.ReceivedMessages)
+        //    {
+        //            PubsubMessage msg = received.Message;
+        //            Console.WriteLine($"Received message {msg.MessageId} published at {msg.PublishTime.ToDateTime()}");
+        //            Console.WriteLine($"Text: '{msg.Data.ToStringUtf8()}'");
+        //    }
+
+
+        //}
 
     }
 }

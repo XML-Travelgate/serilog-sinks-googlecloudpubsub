@@ -19,8 +19,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub.Tests
     public sealed class GoogleCloudPubsubFixture : IDisposable, ICollectionFixture<GoogleCloudPubsubFixture>
     {
         private const string ProjectEnvironmentVariable = "TEST_PROJECT";
-        private const string TopicPrefix = "test-topic-";
-        private const string SubscriptionPrefix = "test-sub-";
+        private const string TopicPrefix = "xunit-test-topic-";
+        private const string SubscriptionPrefix = "xunit-test-sub-";
         public IConfiguration Config { get; set; }
        
         public string ProjectId { get; }
@@ -43,20 +43,54 @@ namespace Serilog.Sinks.GoogleCloudPubSub.Tests
             if (string.IsNullOrEmpty(credentials))
             {
                 Console.WriteLine($"Using credentials file [{credentials}]");
-            }
-            
+            }           
 
          }
 
+        //-------
+
+        internal string GetProjectTopicFull(string topicID)
+        {
+            return $"projects/{this.ProjectId}/topics/{topicID}";
+        }
+
+        internal string GetProjectSubsFull(string subscriptionID)
+        {
+            return $"projects/{this.ProjectId}/subscriptions/{subscriptionID}";
+        }
+
+        //-------
+
         /// <summary>
-        /// /// Create a topic ID with a prefix which is used to check which topics to delete at the end of the test.
+        /// Create a topic ID with a prefix which is used to check which topics to delete at the end of the test.
         /// </summary>
-        internal string CreateTopicId() => TopicPrefix + Guid.NewGuid().ToString().ToLowerInvariant();
+        internal string CreateTopicId()
+        {
+            string newTopicId = TopicPrefix + Guid.NewGuid().ToString().ToLowerInvariant();
+            string newTopicIdFull = this.GetProjectTopicFull(newTopicId);
+
+            PublisherClient publisherClient = PublisherClient.Create();
+            publisherClient.CreateTopic(newTopicIdFull);
+
+            return newTopicId;
+        }
 
         /// <summary>
         /// Create a subscription ID with a prefix which is used to check which subscriptions to delete at the end of the test.
         /// </summary>
-        internal string CreateSubscriptionId() => SubscriptionPrefix + Guid.NewGuid().ToString().ToLowerInvariant();
+        internal string CreateSubscriptionId(string topicId)
+        {
+            string newSubsId = SubscriptionPrefix + Guid.NewGuid().ToString().ToLowerInvariant();
+            string newSubsIdFull = this.GetProjectSubsFull(newSubsId);
+            string topicIdFull = this.GetProjectTopicFull(topicId);
+
+            PushConfig pConfig = new PushConfig();
+
+            SubscriberClient subscriberClient = SubscriberClient.Create();
+            subscriberClient.CreateSubscription(newSubsIdFull, topicIdFull, pConfig, 10);
+
+            return newSubsId;
+        }
 
         public void Dispose()
         {
