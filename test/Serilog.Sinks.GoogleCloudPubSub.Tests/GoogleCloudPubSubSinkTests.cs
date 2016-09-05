@@ -13,7 +13,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub.Tests
 
         //*****************************************************************************************
         //
-        //  EXECUTION SETTINGS
+        //  EXECUTION SETTINGS 
         //
         // Project: it has to be set on the environment variable "TEST_PROJECT".
         // Topic & Subscription: the fixture will create a temporary topic and subscription used only by the test. At the end

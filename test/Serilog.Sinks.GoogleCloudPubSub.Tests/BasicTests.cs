@@ -30,7 +30,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub.Tests
         {
             string projectId = _fixture.ProjectId;
 
-            // Snippet: ListTopics
+            // Snippet: ListTopics 
             PublisherClient client = PublisherClient.Create();
 
             // Alternative: use a known project resource name:

@@ -10,7 +10,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub.Tests
 {
 
     /// <summary>
-    /// Fixture which is set up at the start of the test run, and torn down at the end.
+    /// Fixture which is set up at the start of the test run, and torn down at the end. 
     /// This creates a new bucket which can be used in all snippets. The bucket is deleted
     /// at the end of the test. The Google Cloud Project name is fetched from the TEST_PROJECT
     /// environment variable
