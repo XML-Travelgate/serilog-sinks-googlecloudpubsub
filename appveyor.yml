@@ -10,7 +10,7 @@ install:
   - ps: $env:Path = "$env:DOTNET_INSTALL_DIR;$env:Path"
 build_script:
 - ps: ./Build.ps1
-test: on
+test: off
 artifacts:
 - path: artifacts/Serilog.*.nupkg
 deploy:
