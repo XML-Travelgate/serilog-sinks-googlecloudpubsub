@@ -15,11 +15,7 @@
      "Serilog": "2.2.0",
      "Serilog.Sinks.PeriodicBatching": "2.0.0",
      "Serilog.Sinks.RollingFile":"2.0.0",
-     "Google.Protobuf":"3.0.0",
-     "Google.Apis.Auth":"1.16.0",
-     "Grpc.Auth":"1.0.0",
-     "Grpc.Core":"1.0.0",
-     "Google.Pubsub.V1": "1.0.0-beta01"
+     "Google.Pubsub.V1": "1.0.0-beta02"
      
   },
   "frameworks": { 
