@@ -25,7 +25,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub.Tests
         }
 
        
-        [Fact]
+        // Omitted as it is needed authentication [Fact]
         public void ListTopics()
         {
             string projectId = _fixture.ProjectId;

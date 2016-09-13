@@ -72,7 +72,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub.Tests
         /// <summary>
         /// This test uses the sink to send data to PubSub and then retrieves it to validate that are exactly the same.
         /// </summary>
-        [Fact]
+        // Omitted as it is needed authentication [Fact]
         public void BasicTest()
         {
 
