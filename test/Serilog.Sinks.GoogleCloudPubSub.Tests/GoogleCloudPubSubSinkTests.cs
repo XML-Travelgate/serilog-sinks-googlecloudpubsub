@@ -90,7 +90,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub.Tests
             ILogger testLogger = new LoggerConfiguration()
                 .WriteTo.GoogleCloudPubSub(new GoogleCloudPubSubSinkOptions(this._projectId, this._topicId)
                 {
-                    BufferBaseFilename = _bufferPathLocal, // This means we will use a buffer file on disk instead of using memory.
+                    BufferBaseFilename = this._bufferPathLocal, // This means we will use a buffer file on disk instead of using memory.
                     BufferFileSizeLimitBytes = bufferFileSizeLimitBytes,
                     BufferLogShippingInterval = TimeSpan.FromMilliseconds(2000),       //Send to Google PubSub every 2 seconds. -> 2000
                     Period = TimeSpan.FromMilliseconds(2000),                          //Send to Google PubSub every 2 seconds. -> 2000
@@ -170,24 +170,20 @@ namespace Serilog.Sinks.GoogleCloudPubSub.Tests
                 PullResponse response = this._subscriberClient.Pull(this._subscriptionIdFull, false, 100);
                 //====================
 
-                if (response.ReceivedMessages == null || response.ReceivedMessages.Count == 0)
+                if (response.ReceivedMessages != null && response.ReceivedMessages.Count >= 0)
                 {
-                    // No messages retrieved.
-                    Assert.True(false);
-                    return;
+                    string str = null;
+
+                    foreach (var message in response.ReceivedMessages)
+                    {
+                        // Unpack the message.
+                        str = message.Message.Data.ToStringUtf8();
+                        resultList.Add(str);
+                    }
+
+                    // Acknowledge the message so we don't see it again.
+                    this.AcknowledgeMessages(response);
                 }
-
-                string str = null;
-
-                foreach (var message in response.ReceivedMessages)
-                {
-                    // Unpack the message.
-                    str = message.Message.Data.ToStringUtf8();
-                    resultList.Add(str);
-                }
-
-                // Acknowledge the message so we don't see it again.
-                this.AcknowledgeMessages(response);
             }
             catch (Exception ex)
             {

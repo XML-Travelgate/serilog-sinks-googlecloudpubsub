@@ -57,7 +57,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// </summary>  
         public bool ThrowPublishExceptions { get; set; }
         /// <summary>
-        ///  Customizes the formatter used when converting log events into ElasticSearch documents. Please note that the formatter output must be valid JSON :)
+        ///  Customizes the formatter used when converting log events into data to send to PubSub.
         /// </summary>
         public ITextFormatter CustomFormatter { get; set; }
 

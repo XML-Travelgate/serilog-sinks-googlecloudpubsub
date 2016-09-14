@@ -64,7 +64,7 @@ namespace Serilog
         /// Overload to use an specific configuration.
         /// 
         /// By passing in the options object the BufferBaseFilename, you make this into a durable sink. 
-        /// Meaning it will log to disk first and tries to deliver to the Elasticsearch server in the background.
+        /// Meaning it will log to disk first and tries to deliver to the PubSub server in the background.
         /// </summary>
         /// <remarks>
         /// </remarks>
