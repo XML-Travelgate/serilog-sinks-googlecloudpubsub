@@ -18,6 +18,6 @@
     "Google.Pubsub.V1": "1.0.0-beta02"
   },
   "frameworks": { 
-      "net461":{}
+      "net451":{}
    }
 }
