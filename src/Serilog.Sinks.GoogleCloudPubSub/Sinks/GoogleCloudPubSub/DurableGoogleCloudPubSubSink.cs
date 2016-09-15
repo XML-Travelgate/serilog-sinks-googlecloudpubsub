@@ -58,6 +58,11 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                 throw new ArgumentException("Cannot create the durable GoogleCloudPubSub sink without BufferBaseFilename");
             }
 
+            if (string.IsNullOrWhiteSpace(options.BufferFileExtension))
+            {
+                throw new ArgumentException("Cannot create the durable GoogleCloudPubSub sink without BufferFileExtension");
+            }
+
             if (!options.BufferLogShippingInterval.HasValue ){
                 throw new ArgumentException("Cannot create the durable GoogleCloudPubSub sink without BufferLogShippingInterval");
             }

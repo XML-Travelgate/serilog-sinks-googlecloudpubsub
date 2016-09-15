@@ -304,7 +304,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
       static bool TryReadLine(Stream current, ref long nextStart, out string nextLine)
         {
-            var includesBom = nextStart == 0;
+            //var includesBom = nextStart == 0;
 
             if (current.Length <= nextStart)
             {
@@ -322,8 +322,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                 return false;
 
             nextStart += Encoding.UTF8.GetByteCount(nextLine) + Encoding.UTF8.GetByteCount(Environment.NewLine);
-            if (includesBom)
-                nextStart += 3;
+            //if (includesBom)
+            //    nextStart += 3;
 
             return true;
         }

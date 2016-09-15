@@ -187,8 +187,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub.Tests
             }
             catch (Exception ex)
             {
-                string error = ex.Message;
-                Assert.True(false);
+                Assert.True(false, "Problem recovering data from PubSub: " +  ex.Message);
             }
 
         }
@@ -238,7 +237,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub.Tests
             }
             catch (Exception ex)
             {
-                string error = ex.Message;
+                Assert.True(false, "Problem cleaning data on PubSub: " +  ex.Message);
             }
 
         }
@@ -249,14 +248,14 @@ namespace Serilog.Sinks.GoogleCloudPubSub.Tests
         {
             if (recoveredList == null || recoveredList.Count != initialList.Count)
             {
-                Assert.True(false);
+                Assert.True(false, "Recovered data from PubSub does not match data send to PubSub: different number of elements.");
             }
 
             foreach (string str in initialList)
             {
                 if (!recoveredList.Contains(str))
                 {
-                    Assert.True(false);
+                    Assert.True(false, "Recovered data from PubSub does not match data send to PubSub: almost one data element is different.");
                 }
             }
 

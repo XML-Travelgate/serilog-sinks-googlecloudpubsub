@@ -36,20 +36,54 @@ namespace Serilog
         #region
 
         /// <summary>
-        /// Overload to allow basic configuration through AppSettings.
+        /// Overload to allow configuration through AppSettings: creates a durable sink.
         /// </summary>
         /// <param name="loggerSinkConfiguration">Options for the sink.</param>
         /// <param name="projectId">Google Cloud PubSub Project ID</param>
         /// <param name="topicId">Google Cloud PubSub Topic ID</param>
+        /// <param name="bufferBaseFilename">Path to directory and file name prefix that can be used as a log shipping buffer for increasing the reliability of the log forwarding.</param>
+        /// <param name="bufferFileSizeLimitBytes">The maximum size, in bytes, to which the buffer file for a specific date will be allowed to grow. 
+        /// Once the limit is reached no more events will be stored. Pass null for default value.</param>
+        /// <param name="bufferLogShippingIntervalMilisec">The interval, in miliseconds, between checking the buffer files. Pass null for default value.</param>
+        /// <param name="bufferRetainedFileCountLimit">The maximum number of buffer files that will be retained, including the current buffer file. Pass null for default value.</param>
+        /// <param name="bufferFileExtension">The file extension to use with buffer files. Pass null for default value.</param>
+        /// <param name="batchSizeLimit">The maximum number of events to post in a single batch. Pass null for default value.</param>
         /// <returns>LoggerConfiguration object</returns>
         /// <exception cref="ArgumentNullException"><paramref name="projectId"/> is <see langword="null" />.</exception>
         /// <exception cref="ArgumentNullException"><paramref name="topicId"/> is <see langword="null" />.</exception>
+        /// /// <exception cref="ArgumentNullException"><paramref name="bufferBaseFilename"/> is <see langword="null" />.</exception>
         public static LoggerConfiguration GoogleCloudPubSub(
             this LoggerSinkConfiguration loggerSinkConfiguration,
-            string projectId, 
-            string topicId)
+            string projectId,
+            string topicId,
+            string bufferBaseFilename,
+            long? bufferFileSizeLimitBytes = null,
+            int? bufferLogShippingIntervalMilisec = null,
+            int? bufferRetainedFileCountLimit = null,
+            string bufferFileExtension = null,
+            int? batchSizeLimit = null)
         {
+
+            //--- Creating an options object with the received parameters -------------
+            // If a parameter is null then the corresponding option will not be set and it will be used its default value.
+
             GoogleCloudPubSubSinkOptions options = new GoogleCloudPubSubSinkOptions(projectId, topicId);
+            options.BufferBaseFilename = bufferBaseFilename;
+
+            if (bufferFileSizeLimitBytes != null)
+                options.BufferFileSizeLimitBytes = bufferFileSizeLimitBytes.Value;
+
+            if (bufferLogShippingIntervalMilisec != null)
+                options.BufferLogShippingInterval = TimeSpan.FromMilliseconds(bufferLogShippingIntervalMilisec.Value);
+
+            if (bufferRetainedFileCountLimit != null)
+                options.BufferRetainedFileCountLimit = bufferRetainedFileCountLimit.Value;
+
+            if (!string.IsNullOrEmpty(bufferFileExtension))
+                options.BufferFileExtension = bufferFileExtension;
+
+            if (batchSizeLimit != null)
+                options.BatchSizeLimit = batchSizeLimit.Value;
 
             //--- Mandatory parameters ------------
             ValidateMandatoryOptions(options);
@@ -58,6 +92,9 @@ namespace Serilog
 
             return GoogleCloudPubSub(loggerSinkConfiguration, options);
         }
+
+
+        //--------------------------------------
 
 
         /// <summary>
@@ -112,6 +149,7 @@ namespace Serilog
         #region
         private static void ValidateMandatoryOptions(GoogleCloudPubSubSinkOptions options)
         {
+            //--- Mandatory data for any type of sink used (durable or not). -------------------
             if (string.IsNullOrEmpty(options.ProjectId))
                 throw new ArgumentNullException(nameof(options.ProjectId), "No project specified.");
             if (string.IsNullOrEmpty(options.TopicId))
