@@ -28,10 +28,12 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
 
         //*******************************************************************
-        //      CONFIGURABLE EXECUTING OPTIONS
+        //      CONFIGURABLE EXECUTION OPTIONS
         //*******************************************************************
 
-        #region
+
+        #region ------ Google PubSub settings ------------------------
+
         ///<summary>
         /// GoogleCloudOubSub project to publish.
         /// </summary>
@@ -42,55 +44,77 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// </summary>
         public string TopicId{get;set;}
 
+        #endregion
+
+
+        #region ------ Common (durable and periodic) settings ------------------------
+
         ///<summary>
         /// The maximum number of events to post in a single batch.
         /// </summary>
         public int BatchSizeLimit { get; set; }
 
-        ///<summary>
-        /// The time to wait between checking for event batches. Defaults to 2 seconds.
-        /// </summary>
-        public TimeSpan Period { get; set; }
-        
-        ///<summary>
-        /// Throw LoggingException if  error publishing messages
-        /// </summary>  
-        public bool ThrowPublishExceptions { get; set; }
-        /// <summary>
-        ///  Customizes the formatter used when converting log events into data to send to PubSub.
-        /// </summary>
-        public ITextFormatter CustomFormatter { get; set; }
-
-        /// <summary>
-        /// Optional path to directory that can be used as a log shipping buffer for increasing the reliability of the log forwarding.
-        /// </summary>
-        public string BufferBaseFilename { get; set; }
-
-        /// <summary>
-        /// The maximum size, in bytes, to which the buffer log file for a specific date will be allowed to grow. By default no limit will be applied.
-        /// </summary>
-        public long? BufferFileSizeLimitBytes { get; set; }
-
-        /// <summary>
-        /// Extension for the buffer files.
-        /// </summary>
-        public string BufferFileExtension { get; set; }
-
-        /// <summary>
-        /// The interval between checking the buffer files
-        /// </summary>
-        public TimeSpan? BufferLogShippingInterval { get; set; }
-
-        /// <summary>
-        /// The interval between checking the buffer files
-        /// </summary>
-        public int? BufferRetainedFileCountLimit { get; set; }
-
         /// <summary>
         /// The minimum log event level required in order to write an event to the sink.
         /// </summary>
         public LogEventLevel? MinimumLogEventLevel { get; set; }
+
+        /// <summary>
+        ///  Customizes the formatter used when converting events into data to send to PubSub.
+        /// </summary>
+        public ITextFormatter CustomFormatter { get; set; }
+
         #endregion
+
+
+        #region ------ Periodic Batching settings ------------------------
+
+        ///<summary>
+        /// The time to wait between checking for event batches. Defaults to 2 seconds.
+        /// </summary>
+        public TimeSpan Period { get; set; }
+
+        #endregion
+
+
+        #region ------ Durable settings (using buffer file on disk) ------------------------
+
+        /// <summary>
+        /// The interval between checking the buffer files.
+        /// </summary>
+        public TimeSpan? BufferLogShippingInterval { get; set; }
+
+        //--- The following settings are related to the internal use of RollingFile Sink to manage buffer files. ---
+
+        /// <summary>
+        /// Path to directory that can be used as a log shipping buffer for increasing the reliability of the log forwarding.
+        /// </summary>
+        public string BufferBaseFilename { get; set; }
+
+        /// <summary>
+        /// Extension for the buffer files (will be added to the given BufferBaseFilename).
+        /// </summary>
+        public string BufferFileExtension { get; set; }
+
+        /// <summary>
+        /// The maximum size, in bytes, to which the buffer file for a specific date will be allowed to grow. By default no limit will be applied.
+        /// </summary>
+        public long? BufferFileSizeLimitBytes { get; set; }
+
+        /// <summary>
+        /// The maximum number of buffer files that will be retained, including the current buffer file. For unlimited retention, pass null. The default is 31.
+        /// </summary>
+        public int? BufferRetainedFileCountLimit { get; set; }
+
+        #endregion
+
+
+        //TODO: Temporally not used: 
+        /////<summary>
+        ///// Throw LoggingException if  error publishing messages
+        ///// </summary>  
+        //public bool ThrowPublishExceptions { get; set; }
+
 
 
 
@@ -105,10 +129,9 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// </summary>
         protected GoogleCloudPubSubSinkOptions()
         {
-            this.Period = TimeSpan.FromSeconds(10);
             this.BatchSizeLimit = 50; 
             this.CustomFormatter = new GoogleCloudPubSubRawFormatter();     // Default formatter: raw data.
-            this.ThrowPublishExceptions = true;
+            //TODO: Temporally not used: this.ThrowPublishExceptions = true;
             this.Period = TimeSpan.FromSeconds(2);
             this.BufferFileExtension = ".csv";
         }

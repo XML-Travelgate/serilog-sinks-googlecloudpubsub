@@ -18,7 +18,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub.Tests
             this._fixture = fixture;
         }
          
-         [Fact]
+        // Omitted as it is needed authentication [Fact]
         public void TestOK()
         {
             Assert.True(true, $"Test true test");
