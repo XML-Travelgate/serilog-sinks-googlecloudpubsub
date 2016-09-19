@@ -59,7 +59,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         public GoogleCloudPubSubSink(GoogleCloudPubSubSinkOptions options )
             : base(options.BatchPostingLimit, options.Period)
         {
-            this._state = GoogleCloudPubSubSinkState.Create(options);
+            this._state = GoogleCloudPubSubSinkState.Create(options, null);
         }
         #endregion
 

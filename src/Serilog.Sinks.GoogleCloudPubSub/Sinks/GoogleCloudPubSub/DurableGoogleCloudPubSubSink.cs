@@ -41,26 +41,15 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         private GoogleCloudPubSubLogShipper _shipper;  // -> Contains the State and extracts and uses some options.
 
         // RollingFileSink instance to manage the buffer file.
-        private RollingFileSink _rollingFileSink;
+        private RollingFileSink _dataRollingFileSink;
+
+        // RollingFileSink instance to manage the error file.
+        private RollingFileSink _errorsRollingFileSink;
         #endregion
 
 
-        //*******************************************************************
-        //      PUBLIC
-        //*******************************************************************
 
-        #region
-        /// <summary>
-        /// Returns de event level set in the options.
-        /// </summary>
-        public LogEventLevel? MinimumLogEventLevel
-        {
-            get
-            {
-                return this._state.Options.MinimumLogEventLevel;
-            }
-        }
-        #endregion
+
 
 
         //*******************************************************************
@@ -92,6 +81,10 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// <param name="bufferFileExtension">The file extension to use with buffer files. Pass null for default value.</param>
         /// <param name="batchPostingLimit">The maximum number of events to post in a single batch. Pass null for default value.</param>
         /// <param name="minimumLogEventLevel">The minimum log event level required in order to write an event to the sink. Pass null for default value (minimum).</param>
+        /// <param name="errorBaseFilename">Path to directory that can be used as a log shipping for storing internal errors.
+        /// If set then it means we want to store errors. It can be used the same path as the buffer log (bufferBaseFilename) but the file name can't start with the same string.</param>
+        /// <param name="errorFileSizeLimitBytes">The maximum size, in bytes, to which the error file for a specific date will be allowed to grow. By default no limit will be applied.</param>
+        /// <param name="errorStoreEvents">If set to 'true' then events related to any error will be saved to the error file (after the error message). Pass null for default value (false).</param>
         /// <returns>LoggerConfiguration object</returns>
         /// <exception cref="ArgumentNullException"><paramref name="projectId"/> is <see langword="null" />.</exception>
         /// <exception cref="ArgumentNullException"><paramref name="topicId"/> is <see langword="null" />.</exception>
@@ -105,30 +98,27 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             int? bufferRetainedFileCountLimit = null,
             string bufferFileExtension = null,
             int? batchPostingLimit = null,
-            LogEventLevel minimumLogEventLevel = LevelAlias.Minimum)
+            LogEventLevel minimumLogEventLevel = LevelAlias.Minimum,
+            string errorBaseFilename = null,
+            long? errorFileSizeLimitBytes = null,
+            bool? errorStoreEvents = null)
         {
 
             //--- Creating an options object with the received parameters -------------
             // If a parameter is null then the corresponding option will not be set and it will be used its default value.
 
             GoogleCloudPubSubSinkOptions options = new GoogleCloudPubSubSinkOptions(projectId, topicId);
-            options.BufferBaseFilename = bufferBaseFilename;
-            options.MinimumLogEventLevel = minimumLogEventLevel;
-
-            if (bufferFileSizeLimitBytes != null)
-                options.BufferFileSizeLimitBytes = bufferFileSizeLimitBytes.Value;
-
-            if (bufferLogShippingIntervalMilisec != null)
-                options.BufferLogShippingInterval = TimeSpan.FromMilliseconds(bufferLogShippingIntervalMilisec.Value);
-
-            if (bufferRetainedFileCountLimit != null)
-                options.BufferRetainedFileCountLimit = (bufferRetainedFileCountLimit.Value < 2 ? 2 : bufferRetainedFileCountLimit.Value);
-
-            if (!string.IsNullOrEmpty(bufferFileExtension))
-                options.BufferFileExtension = bufferFileExtension;
-
-            if (batchPostingLimit != null)
-                options.BatchPostingLimit = batchPostingLimit.Value;
+            options.SetValues(
+                bufferBaseFilename,
+                bufferFileSizeLimitBytes,
+                bufferLogShippingIntervalMilisec,
+                bufferRetainedFileCountLimit,
+                bufferFileExtension,
+                batchPostingLimit,
+                minimumLogEventLevel,
+                errorBaseFilename,
+                errorFileSizeLimitBytes,
+                errorStoreEvents);
 
             //-----
 
@@ -146,10 +136,32 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             //---
             // All is ok ... instances are created using the defined options...
 
-            this._state = GoogleCloudPubSubSinkState.Create(options);
+
+
+            //--- RollingFileSink to store internal errors ------------------
+            // It will be generated a file for each day.
+
+            if (!string.IsNullOrWhiteSpace(options.ErrorBaseFilename))
+            {
+                this._errorsRollingFileSink = new RollingFileSink(
+                        options.ErrorBaseFilename + FileNameSuffix + "txt",
+                        new GoogleCloudPubSubRawFormatter(),   // Formatter for error info (raw).
+                        options.ErrorFileSizeLimitBytes,
+                        null
+                    );
+            }
+
+            //---
+
+            this._state = GoogleCloudPubSubSinkState.Create(options, this._errorsRollingFileSink);
             this._shipper = new GoogleCloudPubSubLogShipper(this._state);
 
-            this._rollingFileSink = new RollingFileSink(
+            //---
+
+            //--- RollingFileSink to store data to be sent to PubSub ------------------
+            // It will be generated a file for each day.
+
+            this._dataRollingFileSink = new RollingFileSink(
                     options.BufferBaseFilename + FileNameSuffix + options.BufferFileExtension,
                     this._state.DurableFormatter,   // Formatter for data to insert into the buffer file.
                     options.BufferFileSizeLimitBytes,
@@ -198,6 +210,29 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
 
 
+
+        //*******************************************************************
+        //      PUBLIC
+        //*******************************************************************
+
+        #region
+        /// <summary>
+        /// Returns de event level set in the options.
+        /// </summary>
+        public LogEventLevel? MinimumLogEventLevel
+        {
+            get
+            {
+                return this._state.Options.MinimumLogEventLevel;
+            }
+        }
+
+
+        #endregion
+
+
+
+
         //*******************************************************************
         //      ILogEventSink
         //*******************************************************************
@@ -209,7 +244,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             // level is greater than or equal to the one set to the sink.
             // Log event is formatted using the assigned formatter (by default it is GoogleCloudPubSubRawFormatter)
             // and then the result string is stored into the buffer file that is managed by the RollingFileSink.
-            this._rollingFileSink.Emit(logEvent);
+            this._dataRollingFileSink.Emit(logEvent);
         }
         #endregion
 
@@ -222,9 +257,14 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         #region
         public void Dispose()
         {
-            if (this._rollingFileSink != null)
+            if (this._dataRollingFileSink != null)
             {
-                this._rollingFileSink.Dispose();
+                this._dataRollingFileSink.Dispose();
+            }
+
+            if (this._errorsRollingFileSink != null)
+            {
+                this._errorsRollingFileSink.Dispose();
             }
 
             if (this._shipper != null)

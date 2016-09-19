@@ -49,6 +49,10 @@ namespace Serilog
         /// <param name="bufferFileExtension">The file extension to use with buffer files. Pass null for default value.</param>
         /// <param name="batchPostingLimit">The maximum number of events to post in a single batch. Pass null for default value.</param>
         /// <param name="minimumLogEventLevel">The minimum log event level required in order to write an event to the sink. Pass null for default value.</param>
+        /// <param name="errorBaseFilename">Path to directory that can be used as a log shipping for storing internal errors.
+        /// If set then it means we want to store errors. It can be used the same path as the buffer log (bufferBaseFilename) but the file name can't start with the same string.</param>
+        /// <param name="errorFileSizeLimitBytes">The maximum size, in bytes, to which the error file for a specific date will be allowed to grow. By default no limit will be applied.</param>
+        /// <param name="errorStoreEvents">If set to 'true' then events related to any error will be saved to the error file (after the error message). Pass null for default value (false).</param>
         /// <returns>LoggerConfiguration object</returns>
         /// <exception cref="ArgumentNullException"><paramref name="projectId"/> is <see langword="null" />.</exception>
         /// <exception cref="ArgumentNullException"><paramref name="topicId"/> is <see langword="null" />.</exception>
@@ -63,30 +67,28 @@ namespace Serilog
             int? bufferRetainedFileCountLimit = null,
             string bufferFileExtension = null,
             int? batchPostingLimit = null,
-            LogEventLevel minimumLogEventLevel = LevelAlias.Minimum)
+            LogEventLevel minimumLogEventLevel = LevelAlias.Minimum,
+            string errorBaseFilename = null,
+            long? errorFileSizeLimitBytes = null,
+            bool? errorStoreEvents = null)
         {
 
             //--- Creating an options object with the received parameters -------------
             // If a parameter is null then the corresponding option will not be set and it will be used its default value.
 
             GoogleCloudPubSubSinkOptions options = new GoogleCloudPubSubSinkOptions(projectId, topicId);
-            options.BufferBaseFilename = bufferBaseFilename;
-            options.MinimumLogEventLevel = minimumLogEventLevel;
+            options.SetValues(
+                bufferBaseFilename,
+                bufferFileSizeLimitBytes,
+                bufferLogShippingIntervalMilisec,
+                bufferRetainedFileCountLimit,
+                bufferFileExtension,
+                batchPostingLimit,
+                minimumLogEventLevel,
+                errorBaseFilename,
+                errorFileSizeLimitBytes,
+                errorStoreEvents);
 
-            if (bufferFileSizeLimitBytes != null)
-                options.BufferFileSizeLimitBytes = bufferFileSizeLimitBytes.Value;
-
-            if (bufferLogShippingIntervalMilisec != null)
-                options.BufferLogShippingInterval = TimeSpan.FromMilliseconds(bufferLogShippingIntervalMilisec.Value);
-
-            if (bufferRetainedFileCountLimit != null)
-                options.BufferRetainedFileCountLimit = (bufferRetainedFileCountLimit.Value < 2 ? 2 : bufferRetainedFileCountLimit.Value);
-
-            if (!string.IsNullOrEmpty(bufferFileExtension))
-                options.BufferFileExtension = bufferFileExtension;
-
-            if (batchPostingLimit != null)
-                options.BatchPostingLimit = batchPostingLimit.Value;
 
             //--- Mandatory parameters ------------
             ValidateMandatoryOptions(options);

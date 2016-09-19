@@ -18,6 +18,7 @@ using System.Collections.Generic;
 using Serilog.Formatting;
 using Google.Pubsub.V1;
 using Google.Protobuf;
+using Serilog.Sinks.RollingFile;
 
 namespace Serilog.Sinks.GoogleCloudPubSub
 {
@@ -30,12 +31,12 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         //*******************************************************************
 
         #region
-        public static GoogleCloudPubSubSinkState Create(GoogleCloudPubSubSinkOptions options)
+        public static GoogleCloudPubSubSinkState Create(GoogleCloudPubSubSinkOptions options, RollingFileSink errorsRollingFileSink)
         {
             if (options == null)
                 throw new ArgumentNullException("options");
              else
-                return new GoogleCloudPubSubSinkState(options);  
+                return new GoogleCloudPubSubSinkState(options, errorsRollingFileSink);  
         }
         #endregion
 
@@ -62,6 +63,10 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         private readonly ITextFormatter _periodicBatchingFormatter;
         private readonly ITextFormatter _durableFormatter;
 
+        // RollingFileSink instance to manage the error file.
+        // It is created by the Durable Sink.
+        private readonly RollingFileSink _errorsRollingFileSink;
+
         public ITextFormatter PeriodicBatchingFormatter { get { return this._periodicBatchingFormatter; } }
         public ITextFormatter DurableFormatter { get { return this._durableFormatter; } }
         public GoogleCloudPubSubSinkOptions Options { get { return this._options; } }
@@ -74,7 +79,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         //*******************************************************************
 
         #region
-        private GoogleCloudPubSubSinkState(GoogleCloudPubSubSinkOptions options)
+        private GoogleCloudPubSubSinkState(GoogleCloudPubSubSinkOptions options, RollingFileSink errorsRollingFileSink)
         {
             //--- Mandatory options validations --------------------
             if (options.BatchPostingLimit < 1 ) throw new ArgumentException("batchPostingLimit must be >= 1");
@@ -85,6 +90,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             // All is ok ...
 
             this._options = options;
+            this._errorsRollingFileSink = errorsRollingFileSink;
 
             this._periodicBatchingFormatter = options.CustomFormatter ?? new GoogleCloudPubSubRawFormatter();
             this._durableFormatter = options.CustomFormatter ?? new GoogleCloudPubSubRawFormatter();
@@ -164,9 +170,73 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
             return payload;
         }
-        
+
         #endregion
 
+
+
+        //*******************************************************************
+        //      ERROR LOG AND AUXILIARY FUNCTIONS
+        //*******************************************************************
+
+        #region
+
+        public void Error(string message)
+        {
+            this.Error(message, null);
+        }
+
+        public void Error(string message, List<string> payloadStr)
+        {
+            // This method stored an error (if necessary).
+            try
+            {
+                if (this._errorsRollingFileSink != null && !string.IsNullOrEmpty(message))
+                {
+                    if (this._options.ErrorStoreEvents && payloadStr != null)
+                    {
+                        this._errorsRollingFileSink.Emit(this._CreateErrorLogEvent("---------------------------------------------"));
+                    }
+
+                    //---------
+
+                    this._errorsRollingFileSink.Emit(this._CreateErrorLogEvent(message));
+                    
+                    //---------
+
+                    if (this._options.ErrorStoreEvents && payloadStr != null)
+                    {
+                        this._errorsRollingFileSink.Emit(this._CreateErrorLogEvent(" ---Events---"));
+
+                        if (payloadStr.Count > 0)
+                        {
+                            foreach (string str in payloadStr)
+                            {
+                                this._errorsRollingFileSink.Emit(this._CreateErrorLogEvent(str));
+                            }
+                        }
+                        else
+                        {
+                            this._errorsRollingFileSink.Emit(this._CreateErrorLogEvent("There are no events to send."));
+                        }
+                        
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                //If any problem it will be ignored.
+            }
+        }
+
+        private Events.LogEvent _CreateErrorLogEvent(string message)
+        {
+            Events.MessageTemplate messTemplate = new Events.MessageTemplate(message, new List<Parsing.MessageTemplateToken>());
+            Events.LogEvent logEvent = new Events.LogEvent(DateTimeOffset.Now, Events.LogEventLevel.Error, null, messTemplate, new List<Events.LogEventProperty>());
+            return logEvent;
+        }
+
+        #endregion
     }
 
 }

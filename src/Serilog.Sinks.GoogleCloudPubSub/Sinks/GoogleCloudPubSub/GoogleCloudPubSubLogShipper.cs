@@ -129,7 +129,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                     // class running, only one will ship logs at a time.
                     using (var bookmark = System.IO.File.Open(this._bookmarkFilename, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read))
                     {
-
+                        string auxMessage = null;
 
                         //--- 1st step : identify the current buffer file and position to read from --------------------------------------------
 
@@ -210,7 +210,9 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                             {
                                 //--- ERROR ---
                                 this._connectionSchedule.MarkFailure();
-                                SelfLog.WriteLine("Received failed GoogleCloudPubSub shipping result : {0}", response.ErrorMessage);
+                                auxMessage = $"Shipper: Error sending data to PubSub [{response.ErrorMessage}]";
+                                SelfLog.WriteLine(auxMessage);
+                                this._state.Error(auxMessage, payloadStr);
                                 break;
                             }
                            
@@ -225,7 +227,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
                             // Only advance the bookmark if no other process has the
                             // current file locked, and its length is as we found it.   
-                            if (fileSet.Length == 2 && fileSet.First() == currentFilePath && IsUnlockedAtLength(currentFilePath, nextLineBeginsAtOffset))
+                            if (fileSet.Length == 2 && fileSet.First() == currentFilePath && IsUnlockedAtLength(currentFilePath, nextLineBeginsAtOffset, this._state))
                             {
                                 GoogleCloudPubSubLogShipper.WriteBookmark(bookmark, 0, fileSet[1]);
                             }
@@ -257,7 +259,10 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             }
             catch (Exception ex)
             {
-                SelfLog.WriteLine("Exception while emitting periodic batch from {0}: {1}", this, ex);
+                string auxMessage = string.Format("Shipper: Exception while emitting periodic batch from {0}: {1}", this, ex);
+                SelfLog.WriteLine(auxMessage);
+                this._state.Error(auxMessage);
+
                 this._connectionSchedule.MarkFailure();
             }
             finally
@@ -282,7 +287,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
         #region
 
-        static bool IsUnlockedAtLength(string file, long maxLen)
+        static bool IsUnlockedAtLength(string file, long maxLen, GoogleCloudPubSubSinkState state)
         {
             try
             {
@@ -296,12 +301,16 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                 var errorCode = Marshal.GetHRForException(ex) & ((1 << 16) - 1);
                 if (errorCode != 32 && errorCode != 33)
                 {
-                    SelfLog.WriteLine("Unexpected I/O exception while testing locked status of {0}: {1}", file, ex);
+                    string auxMessage = string.Format("Shipper: Unexpected I/O exception while testing locked status of {0}: {1}", file, ex);
+                    SelfLog.WriteLine(auxMessage);
+                    state.Error(auxMessage);
                 }
             }
             catch (Exception ex)
             {
-                SelfLog.WriteLine("Unexpected exception while testing locked status of {0}: {1}", file, ex);
+                string auxMessage = string.Format("Shipper: Unexpected exception while testing locked status of {0}: {1}", file, ex);
+                SelfLog.WriteLine(auxMessage);
+                state.Error(auxMessage);
             }
 
             return false;

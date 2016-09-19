@@ -109,6 +109,29 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         #endregion
 
 
+        #region ------ Errors storage settings (using file on disk) ------------------------
+
+        /// <summary>
+        /// Path to directory that can be used as a log shipping for storing internal errors.
+        /// If set then it means we want to store errors.
+        /// It can be used the same path as the buffer log (BufferBaseFilename) but the file name can't start with the same string.
+        /// </summary>
+        public string ErrorBaseFilename { get; set; }
+
+        /// <summary>
+        /// The maximum size, in bytes, to which the error file for a specific date will be allowed to grow. By default no limit will be applied.
+        /// </summary>
+        public long? ErrorFileSizeLimitBytes { get; set; }
+
+        /// <summary>
+        /// If set to 'true' then events related to any error will be saved to the error file (after the error message).
+        /// </summary>
+        public bool ErrorStoreEvents { get; set; }
+
+        #endregion
+
+
+
         //TODO: Temporally not used: 
         /////<summary>
         ///// Throw LoggingException if  error publishing messages
@@ -149,5 +172,56 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         }
         #endregion
 
+
+
+
+        //*******************************************************************
+        //      PUBLIC
+        //*******************************************************************
+
+        #region
+
+        public void SetValues(
+            string bufferBaseFilename,
+            long? bufferFileSizeLimitBytes = null,
+            int? bufferLogShippingIntervalMilisec = null,
+            int? bufferRetainedFileCountLimit = null,
+            string bufferFileExtension = null,
+            int? batchPostingLimit = null,
+            LogEventLevel minimumLogEventLevel = LevelAlias.Minimum,
+            string errorBaseFilename = null,
+            long? errorFileSizeLimitBytes = null,
+            bool? errorStoreEvents = null)
+        {
+            this.BufferBaseFilename = bufferBaseFilename;
+            this.ErrorBaseFilename = errorBaseFilename;
+
+            this.MinimumLogEventLevel = minimumLogEventLevel;
+
+            if (bufferFileSizeLimitBytes != null)
+                this.BufferFileSizeLimitBytes = bufferFileSizeLimitBytes.Value;
+
+            if (errorFileSizeLimitBytes != null)
+                this.ErrorFileSizeLimitBytes = errorFileSizeLimitBytes.Value;
+
+            if (bufferLogShippingIntervalMilisec != null)
+                this.BufferLogShippingInterval = TimeSpan.FromMilliseconds(bufferLogShippingIntervalMilisec.Value);
+
+            if (bufferRetainedFileCountLimit != null)
+                this.BufferRetainedFileCountLimit = (bufferRetainedFileCountLimit.Value < 2 ? 2 : bufferRetainedFileCountLimit.Value);
+
+            if (!string.IsNullOrEmpty(bufferFileExtension))
+                this.BufferFileExtension = bufferFileExtension;
+
+            if (batchPostingLimit != null)
+                this.BatchPostingLimit = batchPostingLimit.Value;
+
+            if (errorStoreEvents != null)
+                this.ErrorStoreEvents = errorStoreEvents.Value;
+
+        }
+
+
+        #endregion
     }
 }
