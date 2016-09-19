@@ -54,6 +54,11 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// </summary>
         public int BatchPostingLimit { get; set; }
 
+        ///<summary>
+        /// The maximum size, in bytes, of the batch to send to PubSub. By default no limit will be applied.
+        /// </summary>
+        public long? BatchSizeLimitBytes { get; set; }
+
         /// <summary>
         /// The minimum log event level required in order to write an event to the sink.
         /// </summary>
@@ -188,6 +193,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             int? bufferRetainedFileCountLimit = null,
             string bufferFileExtension = null,
             int? batchPostingLimit = null,
+            long? batchSizeLimitBytes = null,
             LogEventLevel minimumLogEventLevel = LevelAlias.Minimum,
             string errorBaseFilename = null,
             long? errorFileSizeLimitBytes = null,
@@ -198,11 +204,10 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
             this.MinimumLogEventLevel = minimumLogEventLevel;
 
+            //---
+
             if (bufferFileSizeLimitBytes != null)
                 this.BufferFileSizeLimitBytes = bufferFileSizeLimitBytes.Value;
-
-            if (errorFileSizeLimitBytes != null)
-                this.ErrorFileSizeLimitBytes = errorFileSizeLimitBytes.Value;
 
             if (bufferLogShippingIntervalMilisec != null)
                 this.BufferLogShippingInterval = TimeSpan.FromMilliseconds(bufferLogShippingIntervalMilisec.Value);
@@ -213,8 +218,18 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             if (!string.IsNullOrEmpty(bufferFileExtension))
                 this.BufferFileExtension = bufferFileExtension;
 
+            //---
+
             if (batchPostingLimit != null)
                 this.BatchPostingLimit = batchPostingLimit.Value;
+
+            if (batchSizeLimitBytes != null)
+                this.BatchSizeLimitBytes = batchSizeLimitBytes.Value;
+
+            //---
+
+            if (errorFileSizeLimitBytes != null)
+                this.ErrorFileSizeLimitBytes = errorFileSizeLimitBytes.Value;
 
             if (errorStoreEvents != null)
                 this.ErrorStoreEvents = errorStoreEvents.Value;

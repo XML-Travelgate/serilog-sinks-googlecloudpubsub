@@ -180,10 +180,53 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                             current.Position = nextLineBeginsAtOffset;
 
                             string nextLine;
-                            while (count < this._batchPostingLimit && GoogleCloudPubSubLogShipper.TryReadLine(current, ref nextLineBeginsAtOffset, out nextLine))
+                            int nextlineSizeByte;
+                            int currentPayloadSizeByte = 0;
+                            bool continueAdding = true;
+                            long previousBeginsAtOffset;
+
+                            while (count < this._batchPostingLimit && continueAdding)
                             {
-                                payloadStr.Add(nextLine);
-                                ++count;
+                                previousBeginsAtOffset = nextLineBeginsAtOffset;
+
+                                // Is there a next line to send? ...
+                                if (GoogleCloudPubSubLogShipper.TryReadLine(current, ref nextLineBeginsAtOffset, out nextLine))
+                                {
+                                    nextlineSizeByte = Encoding.UTF8.GetByteCount(nextLine);
+
+                                    // Is there space enough to send the next line in this batch? ...
+                                    if (this._state.Options.ErrorFileSizeLimitBytes == null || 
+                                        (currentPayloadSizeByte + nextlineSizeByte <= this._state.Options.BatchSizeLimitBytes.Value))
+                                    {
+                                        //---The next line is added ------------------
+                                        currentPayloadSizeByte += nextlineSizeByte;
+                                        payloadStr.Add(nextLine);
+                                        ++count;
+                                        //--------------------------------------------
+                                    }
+                                    else
+                                    {
+                                        if (nextlineSizeByte > this._state.Options.BatchSizeLimitBytes.Value)
+                                        {
+                                            // If the line is bigger than the max size for the batch then it is skipped and an error is saved (this
+                                            // line will never be sent and would stop sending following lines in an infinite bucle).
+                                            auxMessage = $"Shipper: line skipped because it is bigger ({nextlineSizeByte}) than BatchSizeLimitBytes ({this._state.Options.BatchSizeLimitBytes.Value}).";
+                                            SelfLog.WriteLine(auxMessage);
+                                            this._state.Error(auxMessage, nextLine);
+                                        }
+                                        else
+                                        {
+                                            // The line has to be processed with the next batch, so we modify the offset to be stored with the mark
+                                            // if the current batch data is sent correctly.
+                                            continueAdding = false;
+                                            nextLineBeginsAtOffset = previousBeginsAtOffset;
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    continueAdding = false;
+                                }
                             }
                         }
 
@@ -219,7 +262,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                         }
                         else
                         {
-                            // ...no, we don't have data, but may be there is another buffer file waiting with data to be sent...
+                            // ...no, we don't have data to send, but may be there is another buffer file waiting with data to be sent...
 
                             // For whatever reason, there's nothing waiting to send. This means we should try connecting again at the
                             // regular interval, so mark the attempt as successful.
@@ -344,6 +387,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                 return false;
 
             nextStart += Encoding.UTF8.GetByteCount(nextLine) + Encoding.UTF8.GetByteCount(Environment.NewLine);
+
             //if (includesBom)
             //    nextStart += 3;
 

@@ -183,7 +183,15 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
         public void Error(string message)
         {
-            this.Error(message, null);
+            List<string> dumyPayloadStr = null;
+            this.Error(message, dumyPayloadStr);
+        }
+
+        public void Error(string message, string simplePayloadStr)
+        {
+            List<string> payloadStr = new List<string>();
+            payloadStr.Add(simplePayloadStr);
+            this.Error(message, payloadStr);
         }
 
         public void Error(string message, List<string> payloadStr)

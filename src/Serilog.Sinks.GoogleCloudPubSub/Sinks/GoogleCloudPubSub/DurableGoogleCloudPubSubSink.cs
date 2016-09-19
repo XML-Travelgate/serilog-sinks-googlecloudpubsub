@@ -80,6 +80,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// <param name="bufferRetainedFileCountLimit">The maximum number of buffer files that will be retained, including the current buffer file. Pass null for default value (no limit). The minimum value is 2.</param>
         /// <param name="bufferFileExtension">The file extension to use with buffer files. Pass null for default value.</param>
         /// <param name="batchPostingLimit">The maximum number of events to post in a single batch. Pass null for default value.</param>
+        /// <param name="batchSizeLimitBytes">The maximum size, in bytes, of the batch to send to PubSub. By default no limit will be applied.</param>
         /// <param name="minimumLogEventLevel">The minimum log event level required in order to write an event to the sink. Pass null for default value (minimum).</param>
         /// <param name="errorBaseFilename">Path to directory that can be used as a log shipping for storing internal errors.
         /// If set then it means we want to store errors. It can be used the same path as the buffer log (bufferBaseFilename) but the file name can't start with the same string.</param>
@@ -98,6 +99,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             int? bufferRetainedFileCountLimit = null,
             string bufferFileExtension = null,
             int? batchPostingLimit = null,
+            long? batchSizeLimitBytes = null,
             LogEventLevel minimumLogEventLevel = LevelAlias.Minimum,
             string errorBaseFilename = null,
             long? errorFileSizeLimitBytes = null,
@@ -115,6 +117,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                 bufferRetainedFileCountLimit,
                 bufferFileExtension,
                 batchPostingLimit,
+                batchSizeLimitBytes,
                 minimumLogEventLevel,
                 errorBaseFilename,
                 errorFileSizeLimitBytes,
@@ -137,14 +140,12 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             // All is ok ... instances are created using the defined options...
 
 
-
             //--- RollingFileSink to store internal errors ------------------
             // It will be generated a file for each day.
-
             if (!string.IsNullOrWhiteSpace(options.ErrorBaseFilename))
             {
                 this._errorsRollingFileSink = new RollingFileSink(
-                        options.ErrorBaseFilename + FileNameSuffix + "txt",
+                        options.ErrorBaseFilename + FileNameSuffix + ".txt",
                         new GoogleCloudPubSubRawFormatter(),   // Formatter for error info (raw).
                         options.ErrorFileSizeLimitBytes,
                         null
@@ -160,7 +161,6 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
             //--- RollingFileSink to store data to be sent to PubSub ------------------
             // It will be generated a file for each day.
-
             this._dataRollingFileSink = new RollingFileSink(
                     options.BufferBaseFilename + FileNameSuffix + options.BufferFileExtension,
                     this._state.DurableFormatter,   // Formatter for data to insert into the buffer file.
