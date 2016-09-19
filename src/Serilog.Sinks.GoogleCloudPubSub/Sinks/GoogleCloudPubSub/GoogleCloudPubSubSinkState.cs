@@ -77,7 +77,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         private GoogleCloudPubSubSinkState(GoogleCloudPubSubSinkOptions options)
         {
             //--- Mandatory options validations --------------------
-            if (options.BatchSizeLimit < 1 ) throw new ArgumentException("batchSizeLimit must be >= 1");
+            if (options.BatchPostingLimit < 1 ) throw new ArgumentException("batchPostingLimit must be >= 1");
             if (string.IsNullOrWhiteSpace(options.ProjectId)) throw new ArgumentException("options.ProjectId");
             if (string.IsNullOrWhiteSpace(options.TopicId)) throw new ArgumentException("options.TopicId");
 

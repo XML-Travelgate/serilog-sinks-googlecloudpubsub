@@ -22,8 +22,9 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 {
     // This class uses a file on disk as a buffer previous sending data (in blocks) to the remote server.
     // It is used RollingFileSink to manage this buffer file.
+    // the buffer file is coded with UTF-8 and without BOM.
 
-    class DurableGoogleCloudPubSubSink : ILogEventSink, IDisposable
+    public class DurableGoogleCloudPubSubSink : ILogEventSink, IDisposable
     {
 
         //*******************************************************************
@@ -36,36 +37,111 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         const string FileNameSuffix = "-{Date}";
 
         // Google Cloud PubSub Shipper and State instances.
-        readonly GoogleCloudPubSubSinkState _state;     // -> Contains the options.
-        readonly GoogleCloudPubSubLogShipper _shipper;  // -> Contains the State and extracts and uses some options.
+        private GoogleCloudPubSubSinkState _state;     // -> Contains the options.
+        private GoogleCloudPubSubLogShipper _shipper;  // -> Contains the State and extracts and uses some options.
 
         // RollingFileSink instance to manage the buffer file.
-        readonly RollingFileSink _rollingFileSink;
+        private RollingFileSink _rollingFileSink;
         #endregion
 
 
-
-
         //*******************************************************************
-        //      CONSTRUCTOR
+        //      PUBLIC
         //*******************************************************************
 
         #region
+        /// <summary>
+        /// Returns de event level set in the options.
+        /// </summary>
+        public LogEventLevel? MinimumLogEventLevel
+        {
+            get
+            {
+                return this._state.Options.MinimumLogEventLevel;
+            }
+        }
+        #endregion
+
+
+        //*******************************************************************
+        //      CONSTRUCTORS
+        //*******************************************************************
+
+        #region
+        /// <summary>
+        /// Default constructor with a given options object.
+        /// </summary>
+        /// <param name="options"></param>
         public DurableGoogleCloudPubSubSink(GoogleCloudPubSubSinkOptions options)
         {
+            this.Initialize(options);
+        }
+
+
+
+        /// <summary>
+        /// Constructor specifying concret options values.
+        /// </summary>
+        /// <param name="projectId">Google Cloud PubSub Project ID</param>
+        /// <param name="topicId">Google Cloud PubSub Topic ID</param>
+        /// <param name="bufferBaseFilename">Path to directory and file name prefix that can be used as a log shipping buffer for increasing the reliability of the log forwarding.</param>
+        /// <param name="bufferFileSizeLimitBytes">The maximum size, in bytes, to which the buffer file for a specific date will be allowed to grow. 
+        /// Once the limit is reached no more events will be stored. Pass null for default value.</param>
+        /// <param name="bufferLogShippingIntervalMilisec">The interval, in miliseconds, between checking the buffer files. Pass null for default value.</param>
+        /// <param name="bufferRetainedFileCountLimit">The maximum number of buffer files that will be retained, including the current buffer file. Pass null for default value (no limit). The minimum value is 2.</param>
+        /// <param name="bufferFileExtension">The file extension to use with buffer files. Pass null for default value.</param>
+        /// <param name="batchPostingLimit">The maximum number of events to post in a single batch. Pass null for default value.</param>
+        /// <param name="minimumLogEventLevel">The minimum log event level required in order to write an event to the sink. Pass null for default value (minimum).</param>
+        /// <returns>LoggerConfiguration object</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="projectId"/> is <see langword="null" />.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="topicId"/> is <see langword="null" />.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="bufferBaseFilename"/> is <see langword="null" />.</exception>
+        public DurableGoogleCloudPubSubSink(
+            string projectId,
+            string topicId,
+            string bufferBaseFilename,
+            long? bufferFileSizeLimitBytes = null,
+            int? bufferLogShippingIntervalMilisec = null,
+            int? bufferRetainedFileCountLimit = null,
+            string bufferFileExtension = null,
+            int? batchPostingLimit = null,
+            LogEventLevel minimumLogEventLevel = LevelAlias.Minimum)
+        {
+
+            //--- Creating an options object with the received parameters -------------
+            // If a parameter is null then the corresponding option will not be set and it will be used its default value.
+
+            GoogleCloudPubSubSinkOptions options = new GoogleCloudPubSubSinkOptions(projectId, topicId);
+            options.BufferBaseFilename = bufferBaseFilename;
+            options.MinimumLogEventLevel = minimumLogEventLevel;
+
+            if (bufferFileSizeLimitBytes != null)
+                options.BufferFileSizeLimitBytes = bufferFileSizeLimitBytes.Value;
+
+            if (bufferLogShippingIntervalMilisec != null)
+                options.BufferLogShippingInterval = TimeSpan.FromMilliseconds(bufferLogShippingIntervalMilisec.Value);
+
+            if (bufferRetainedFileCountLimit != null)
+                options.BufferRetainedFileCountLimit = (bufferRetainedFileCountLimit.Value < 2 ? 2 : bufferRetainedFileCountLimit.Value);
+
+            if (!string.IsNullOrEmpty(bufferFileExtension))
+                options.BufferFileExtension = bufferFileExtension;
+
+            if (batchPostingLimit != null)
+                options.BatchPostingLimit = batchPostingLimit.Value;
+
+            //-----
+
+            this.Initialize(options);
+        }
+
+
+        //--------------
+
+        private void Initialize(GoogleCloudPubSubSinkOptions options)
+        {
             //--- Mandatory options validations --------------------
-            if (string.IsNullOrWhiteSpace(options.BufferBaseFilename)){
-                throw new ArgumentException("Cannot create the durable GoogleCloudPubSub sink without BufferBaseFilename");
-            }
-
-            if (string.IsNullOrWhiteSpace(options.BufferFileExtension))
-            {
-                throw new ArgumentException("Cannot create the durable GoogleCloudPubSub sink without BufferFileExtension");
-            }
-
-            if (!options.BufferLogShippingInterval.HasValue ){
-                throw new ArgumentException("Cannot create the durable GoogleCloudPubSub sink without BufferLogShippingInterval");
-            }
+            this.ValidateMandatoryOptions(options);
 
             //---
             // All is ok ... instances are created using the defined options...
@@ -77,9 +153,46 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                     options.BufferBaseFilename + FileNameSuffix + options.BufferFileExtension,
                     this._state.DurableFormatter,   // Formatter for data to insert into the buffer file.
                     options.BufferFileSizeLimitBytes,
-                    options.BufferRetainedFileCountLimit
+                    null
                 );
         }
+
+
+        //--------------
+
+        private void ValidateMandatoryOptions(GoogleCloudPubSubSinkOptions options)
+        {
+            if (string.IsNullOrEmpty(options.ProjectId))
+            {
+                throw new ArgumentNullException(nameof(options.ProjectId), "No project specified.");
+            }
+
+            if (string.IsNullOrEmpty(options.TopicId))
+            {
+                throw new ArgumentNullException(nameof(options.TopicId), "No topic specified.");
+            }
+
+            if (string.IsNullOrWhiteSpace(options.BufferBaseFilename))
+            {
+                throw new ArgumentException("Cannot create the durable GoogleCloudPubSub sink without BufferBaseFilename");
+            }
+
+            if (string.IsNullOrWhiteSpace(options.BufferFileExtension))
+            {
+                throw new ArgumentException("Cannot create the durable GoogleCloudPubSub sink without BufferFileExtension");
+            }
+
+            if (!options.BufferLogShippingInterval.HasValue)
+            {
+                throw new ArgumentException("Cannot create the durable GoogleCloudPubSub sink without BufferLogShippingInterval");
+            }
+
+            if (options.BufferRetainedFileCountLimit.HasValue && options.BufferRetainedFileCountLimit.Value < 2)
+            {
+                throw new ArgumentException("BufferRetainedFileCountLimit minimum value is 2");
+            }
+        }
+
         #endregion
 
 
@@ -92,7 +205,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         #region
         public void Emit(LogEvent logEvent)
         {
-            // This method is executed each time we write anything on the Serilog instance with this sink.
+            // This method is executed each time we write anything on the Serilog instance with this sink and its event
+            // level is greater than or equal to the one set to the sink.
             // Log event is formatted using the assigned formatter (by default it is GoogleCloudPubSubRawFormatter)
             // and then the result string is stored into the buffer file that is managed by the RollingFileSink.
             this._rollingFileSink.Emit(logEvent);

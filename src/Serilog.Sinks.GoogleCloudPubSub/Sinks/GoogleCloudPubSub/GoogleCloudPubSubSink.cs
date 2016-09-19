@@ -57,7 +57,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// </summary>
         /// <param name="options">Options configuring how the sink behaves, may NOT be null</param>
         public GoogleCloudPubSubSink(GoogleCloudPubSubSinkOptions options )
-            : base(options.BatchSizeLimit, options.Period)
+            : base(options.BatchPostingLimit, options.Period)
         {
             this._state = GoogleCloudPubSubSinkState.Create(options);
         }

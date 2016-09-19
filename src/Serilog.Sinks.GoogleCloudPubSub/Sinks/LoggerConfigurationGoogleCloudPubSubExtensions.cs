@@ -45,13 +45,14 @@ namespace Serilog
         /// <param name="bufferFileSizeLimitBytes">The maximum size, in bytes, to which the buffer file for a specific date will be allowed to grow. 
         /// Once the limit is reached no more events will be stored. Pass null for default value.</param>
         /// <param name="bufferLogShippingIntervalMilisec">The interval, in miliseconds, between checking the buffer files. Pass null for default value.</param>
-        /// <param name="bufferRetainedFileCountLimit">The maximum number of buffer files that will be retained, including the current buffer file. Pass null for default value.</param>
+        /// <param name="bufferRetainedFileCountLimit">The maximum number of buffer files that will be retained, including the current buffer file. Pass null for default value (no limit). The minimum value is 2.</param>
         /// <param name="bufferFileExtension">The file extension to use with buffer files. Pass null for default value.</param>
-        /// <param name="batchSizeLimit">The maximum number of events to post in a single batch. Pass null for default value.</param>
+        /// <param name="batchPostingLimit">The maximum number of events to post in a single batch. Pass null for default value.</param>
+        /// <param name="minimumLogEventLevel">The minimum log event level required in order to write an event to the sink. Pass null for default value.</param>
         /// <returns>LoggerConfiguration object</returns>
         /// <exception cref="ArgumentNullException"><paramref name="projectId"/> is <see langword="null" />.</exception>
         /// <exception cref="ArgumentNullException"><paramref name="topicId"/> is <see langword="null" />.</exception>
-        /// /// <exception cref="ArgumentNullException"><paramref name="bufferBaseFilename"/> is <see langword="null" />.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="bufferBaseFilename"/> is <see langword="null" />.</exception>
         public static LoggerConfiguration GoogleCloudPubSub(
             this LoggerSinkConfiguration loggerSinkConfiguration,
             string projectId,
@@ -61,7 +62,8 @@ namespace Serilog
             int? bufferLogShippingIntervalMilisec = null,
             int? bufferRetainedFileCountLimit = null,
             string bufferFileExtension = null,
-            int? batchSizeLimit = null)
+            int? batchPostingLimit = null,
+            LogEventLevel minimumLogEventLevel = LevelAlias.Minimum)
         {
 
             //--- Creating an options object with the received parameters -------------
@@ -69,6 +71,7 @@ namespace Serilog
 
             GoogleCloudPubSubSinkOptions options = new GoogleCloudPubSubSinkOptions(projectId, topicId);
             options.BufferBaseFilename = bufferBaseFilename;
+            options.MinimumLogEventLevel = minimumLogEventLevel;
 
             if (bufferFileSizeLimitBytes != null)
                 options.BufferFileSizeLimitBytes = bufferFileSizeLimitBytes.Value;
@@ -77,13 +80,13 @@ namespace Serilog
                 options.BufferLogShippingInterval = TimeSpan.FromMilliseconds(bufferLogShippingIntervalMilisec.Value);
 
             if (bufferRetainedFileCountLimit != null)
-                options.BufferRetainedFileCountLimit = bufferRetainedFileCountLimit.Value;
+                options.BufferRetainedFileCountLimit = (bufferRetainedFileCountLimit.Value < 2 ? 2 : bufferRetainedFileCountLimit.Value);
 
             if (!string.IsNullOrEmpty(bufferFileExtension))
                 options.BufferFileExtension = bufferFileExtension;
 
-            if (batchSizeLimit != null)
-                options.BatchSizeLimit = batchSizeLimit.Value;
+            if (batchPostingLimit != null)
+                options.BatchPostingLimit = batchPostingLimit.Value;
 
             //--- Mandatory parameters ------------
             ValidateMandatoryOptions(options);
@@ -108,14 +111,11 @@ namespace Serilog
         /// <param name="loggerSinkConfiguration">Options for the sink.</param>
         /// <param name="options">Provides options specific to the GoogleCloudPubSub sink</param>
         /// <returns>LoggerConfiguration object</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="options"/> is <see langword="null" />.</exception>
         public static LoggerConfiguration GoogleCloudPubSub(
             this LoggerSinkConfiguration loggerSinkConfiguration,
-            GoogleCloudPubSubSinkOptions options = null)
+            GoogleCloudPubSubSinkOptions options)
         {
-
-            // If options are not given then a default dummy options object is created 
-            // (it may cause a fault as mandatory options have not been set).
-            options = options ?? new GoogleCloudPubSubSinkOptions(null, null);
 
             //--- Mandatory parameters ------------
             ValidateMandatoryOptions(options);
@@ -139,7 +139,32 @@ namespace Serilog
             return loggerSinkConfiguration.Sink(sink, options.MinimumLogEventLevel ?? LevelAlias.Minimum);
         }
 
+        //--------------------------------------
+
+
+        /// <summary>
+        /// Overload to use a given instance of the durable sink created and initialized outside.
+        /// </summary>
+        /// <remarks>
+        /// </remarks>
+        /// <param name="loggerSinkConfiguration">Options for the sink.</param>
+        /// <param name="durableSink">Instance of the durable sink to use, configured outside.</param>
+        /// <returns>LoggerConfiguration object</returns>
+        public static LoggerConfiguration GoogleCloudPubSub(
+            this LoggerSinkConfiguration loggerSinkConfiguration,
+            DurableGoogleCloudPubSubSink durableSink)
+        {
+            return loggerSinkConfiguration.Sink(durableSink, durableSink.MinimumLogEventLevel ?? LevelAlias.Minimum);
+        }
+
+
         #endregion
+
+
+
+
+
+
 
 
         //*******************************************************************

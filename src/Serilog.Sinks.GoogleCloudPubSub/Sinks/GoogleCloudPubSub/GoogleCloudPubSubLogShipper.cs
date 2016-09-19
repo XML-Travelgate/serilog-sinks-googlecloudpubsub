@@ -19,9 +19,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using Serilog.Debugging;
-using Google.Pubsub.V1;
 using System.Collections.Generic;
-using Google.Protobuf;
 using System.Runtime.InteropServices;
 
 namespace Serilog.Sinks.GoogleCloudPubSub
@@ -35,7 +33,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
         #region
         private readonly GoogleCloudPubSubSinkState _state;
-        readonly int _batchSizeLimit;
+        readonly int _batchPostingLimit;
+        readonly int? _retainedFileCountLimit;
         readonly Timer _timer;
         readonly ExponentialBackoffConnectionSchedule _connectionSchedule;
         readonly string _bookmarkFilename;
@@ -56,7 +55,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         {
             this._state = state;
             this._connectionSchedule = new ExponentialBackoffConnectionSchedule(this._state.Options.BufferLogShippingInterval.Value );
-            this._batchSizeLimit = this._state.Options.BatchSizeLimit;
+            this._batchPostingLimit = this._state.Options.BatchPostingLimit;
+            this._retainedFileCountLimit = this._state.Options.BufferRetainedFileCountLimit;
             this._bookmarkFilename = Path.GetFullPath(this._state.Options.BufferBaseFilename + ".bookmark");
             this._logFolder = Path.GetDirectoryName(this._bookmarkFilename);
             this._candidateSearchPath = Path.GetFileName(this._state.Options.BufferBaseFilename) + "*" + this._state.Options.BufferFileExtension;
@@ -140,10 +140,10 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                         //      Data is recovered from one buffer file each time onTick is executed.
 
                         // We read the bookmark to know from which file/position continue reading for the last processed file...
-                        TryReadBookmark(bookmark, out nextLineBeginsAtOffset, out currentFilePath);
+                        GoogleCloudPubSubLogShipper.TryReadBookmark(bookmark, out nextLineBeginsAtOffset, out currentFilePath);
 
                         // Candidate buffer files (in the working folder): all and ordered by name to have a sequence of treatment.
-                        string[] fileSet = GetFileSet();
+                        string[] fileSet = this.GetFileSet();
 
                         // We don't have a bookmark or it is not pointing to an existing file...
                         if (currentFilePath == null || !System.IO.File.Exists(currentFilePath))
@@ -180,7 +180,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                             current.Position = nextLineBeginsAtOffset;
 
                             string nextLine;
-                            while (count < this._batchSizeLimit && TryReadLine(current, ref nextLineBeginsAtOffset, out nextLine))
+                            while (count < this._batchPostingLimit && GoogleCloudPubSubLogShipper.TryReadLine(current, ref nextLineBeginsAtOffset, out nextLine))
                             {
                                 payloadStr.Add(nextLine);
                                 ++count;
@@ -203,7 +203,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                             if (response.Success)
                             {
                                 //--- OK ---
-                                WriteBookmark(bookmark, nextLineBeginsAtOffset, currentFilePath);
+                                GoogleCloudPubSubLogShipper.WriteBookmark(bookmark, nextLineBeginsAtOffset, currentFilePath);
                                 this._connectionSchedule.MarkSuccess();
                             }
                             else
@@ -227,20 +227,33 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                             // current file locked, and its length is as we found it.   
                             if (fileSet.Length == 2 && fileSet.First() == currentFilePath && IsUnlockedAtLength(currentFilePath, nextLineBeginsAtOffset))
                             {
-                                WriteBookmark(bookmark, 0, fileSet[1]);
+                                GoogleCloudPubSubLogShipper.WriteBookmark(bookmark, 0, fileSet[1]);
                             }
-                            if (fileSet.Length > 2)
-                            {
-                                // Once there's a third file waiting to ship, we do our
-                                // best to move on, though a lock on the current file
-                                // will delay this.
 
-                                System.IO.File.Delete(fileSet[0]);
-                            }
+                            //if (fileSet.Length > 2)
+                            //{
+                            //    // Once there's a third file waiting to ship, we do our
+                            //    // best to move on, though a lock on the current file
+                            //    // will delay this.
+
+                            //    System.IO.File.Delete(fileSet[0]);
+                            //}
                         }
+
+                        
+                        //--- Retained File Count Limit --------------
+                        // If necessary, one obsolete fiel is deleted each time.
+                        // It is done event there is or not data to send: it is possible that our application is sending data at any time.
+                        if (fileSet.Length > 2 && fileSet.Length > this._retainedFileCountLimit && fileSet.First() != currentFilePath)
+                        {
+                            System.IO.File.Delete(fileSet[0]);
+                        }
+                        //--------------------------------------------
+
+
                     }
                 }
-                while (count == this._batchSizeLimit);
+                while (count == this._batchPostingLimit);
             }
             catch (Exception ex)
             {
@@ -302,7 +315,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             }
         }
 
-      static bool TryReadLine(Stream current, ref long nextStart, out string nextLine)
+        static bool TryReadLine(Stream current, ref long nextStart, out string nextLine)
         {
             //var includesBom = nextStart == 0;
 

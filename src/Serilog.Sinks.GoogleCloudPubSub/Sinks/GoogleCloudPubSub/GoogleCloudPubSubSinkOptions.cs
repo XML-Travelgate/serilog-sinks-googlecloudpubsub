@@ -52,7 +52,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         ///<summary>
         /// The maximum number of events to post in a single batch.
         /// </summary>
-        public int BatchSizeLimit { get; set; }
+        public int BatchPostingLimit { get; set; }
 
         /// <summary>
         /// The minimum log event level required in order to write an event to the sink.
@@ -129,7 +129,9 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// </summary>
         protected GoogleCloudPubSubSinkOptions()
         {
-            this.BatchSizeLimit = 50; 
+            //--- Constructor with not null/zero default values -----------------
+
+            this.BatchPostingLimit = 50; 
             this.CustomFormatter = new GoogleCloudPubSubRawFormatter();     // Default formatter: raw data.
             //TODO: Temporally not used: this.ThrowPublishExceptions = true;
             this.BufferFileExtension = ".csv";
