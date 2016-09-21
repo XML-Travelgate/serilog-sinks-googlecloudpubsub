@@ -329,7 +329,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                     }
                 }
                 while (count == this._batchPostingLimit || isSizeLimitOverflow);
-                // Batch data sending will be done while it is supposed to be more data to send...
+                // Batch data sent will be done while it is supposed to be more data to send...
                 //  ...because we have reached the posting limit.
                 //  ...because we have reached the size limit.
 

@@ -50,12 +50,12 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         #region ------ Common (durable and periodic) settings ------------------------
 
         ///<summary>
-        /// The maximum number of events to post in a single batch.
+        /// The maximum number of events to post to PubSub in a single batch.
         /// </summary>
         public int BatchPostingLimit { get; set; }
 
         ///<summary>
-        /// The maximum size, in bytes, of the batch to send to PubSub. By default no limit will be applied.
+        /// The maximum size, in bytes, to post to PubSub in a single batch. By default no limit will be applied.
         /// </summary>
         public long? BatchSizeLimitBytes { get; set; }
 
