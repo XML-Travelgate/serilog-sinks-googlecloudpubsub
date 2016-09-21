@@ -34,6 +34,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         #region
         private readonly GoogleCloudPubSubSinkState _state;
         readonly int _batchPostingLimit;
+        readonly long? _batchSizeLimitBytes;
         readonly int? _retainedFileCountLimit;
         readonly Timer _timer;
         readonly ExponentialBackoffConnectionSchedule _connectionSchedule;
@@ -42,6 +43,9 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         readonly string _candidateSearchPath;
         readonly object _stateLock = new object();
         volatile bool _unloading;
+
+        private static string CNST_Shipper_Error = "Shipper [Error]: ";
+        private static string CNST_Shipper_Debug = "Shipper [Debug]: ";
         #endregion
 
 
@@ -56,6 +60,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             this._state = state;
             this._connectionSchedule = new ExponentialBackoffConnectionSchedule(this._state.Options.BufferLogShippingInterval.Value );
             this._batchPostingLimit = this._state.Options.BatchPostingLimit;
+            this._batchSizeLimitBytes = this._state.Options.BatchSizeLimitBytes;
             this._retainedFileCountLimit = this._state.Options.BufferRetainedFileCountLimit;
             this._bookmarkFilename = Path.GetFullPath(this._state.Options.BufferBaseFilename + ".bookmark");
             this._logFolder = Path.GetDirectoryName(this._bookmarkFilename);
@@ -122,6 +127,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
              try
             {
                 var count = 0;
+                bool isSizeLimitOverflow = false;
 
                 do
                 {
@@ -173,17 +179,18 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                         //--- 2nd step : read current buffer file and position ------------------------------------------------------
 
                         List<string> payloadStr = new List<string>();
+                        long payloadSizeByte = 0;
                         count = 0;
+                        isSizeLimitOverflow = false;
 
                         using (var current = System.IO.File.Open(currentFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                         {
                             current.Position = nextLineBeginsAtOffset;
 
                             string nextLine;
-                            int nextlineSizeByte;
-                            int currentPayloadSizeByte = 0;
+                            long nextlineSizeByte;
                             bool continueAdding = true;
-                            long previousBeginsAtOffset;
+                            long previousBeginsAtOffset;   
 
                             while (count < this._batchPostingLimit && continueAdding)
                             {
@@ -195,24 +202,32 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                                     nextlineSizeByte = Encoding.UTF8.GetByteCount(nextLine);
 
                                     // Is there space enough to send the next line in this batch? ...
-                                    if (this._state.Options.ErrorFileSizeLimitBytes == null || 
-                                        (currentPayloadSizeByte + nextlineSizeByte <= this._state.Options.BatchSizeLimitBytes.Value))
+                                    if (this._batchSizeLimitBytes == null || 
+                                        (payloadSizeByte + nextlineSizeByte <= this._batchSizeLimitBytes.Value))
                                     {
                                         //---The next line is added ------------------
-                                        currentPayloadSizeByte += nextlineSizeByte;
+                                        payloadSizeByte += nextlineSizeByte;
                                         payloadStr.Add(nextLine);
                                         ++count;
                                         //--------------------------------------------
                                     }
                                     else
                                     {
-                                        if (nextlineSizeByte > this._state.Options.BatchSizeLimitBytes.Value)
+                                        isSizeLimitOverflow = true;  // We have reached the size limit for this batch.
+
+                                        if (nextlineSizeByte > this._batchSizeLimitBytes.Value)
                                         {
-                                            // If the line is bigger than the max size for the batch then it is skipped and an error is saved (this
-                                            // line will never be sent and would stop sending following lines in an infinite bucle).
-                                            auxMessage = $"Shipper: line skipped because it is bigger ({nextlineSizeByte}) than BatchSizeLimitBytes ({this._state.Options.BatchSizeLimitBytes.Value}).";
-                                            SelfLog.WriteLine(auxMessage);
-                                            this._state.Error(auxMessage, nextLine);
+                                            try
+                                            {
+                                                // If the line is bigger than the max size for the batch then it is skipped and an error is saved (this
+                                                // line will never be sent and would stop sending following lines in an infinite bucle).
+                                                auxMessage = $"{CNST_Shipper_Error} Line skipped because it is bigger ({nextlineSizeByte}) than BatchSizeLimitBytes ({this._batchSizeLimitBytes.Value}).";
+                                                SelfLog.WriteLine(auxMessage);
+                                                this._state.Error(auxMessage, nextLine);
+                                            }
+                                            catch
+                                            {
+                                            }
                                         }
                                         else
                                         {
@@ -227,12 +242,23 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                                 {
                                     continueAdding = false;
                                 }
-                            }
+
+                            } //---end:while---
+
                         }
 
 
+                        if (count == this._batchPostingLimit || isSizeLimitOverflow)
+                        {
+                            //  ...we have reached the posting limit.
+                            //  ...we have reached the size limit.
+                            this._state.DebugOverflow(CNST_Shipper_Debug, count, this._batchPostingLimit, payloadSizeByte, this._batchSizeLimitBytes);
+                        }
+
 
                         //--- 3rd step : send data (if we have any) and update bookmark ------------------------------------------------------
+
+                        this._state.Debug($"{CNST_Shipper_Debug} Payload to send...", payloadStr);
 
                         // Do we have data to send?
                         if (count > 0)
@@ -248,12 +274,14 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                                 //--- OK ---
                                 GoogleCloudPubSubLogShipper.WriteBookmark(bookmark, nextLineBeginsAtOffset, currentFilePath);
                                 this._connectionSchedule.MarkSuccess();
+
+                                this._state.Debug($"{CNST_Shipper_Debug} Data sent OK to PubSub.");
                             }
                             else
                             {
                                 //--- ERROR ---
                                 this._connectionSchedule.MarkFailure();
-                                auxMessage = $"Shipper: Error sending data to PubSub [{response.ErrorMessage}]";
+                                auxMessage = $"{CNST_Shipper_Error} Data sent ERROR to PubSub. [{response.ErrorMessage}]";
                                 SelfLog.WriteLine(auxMessage);
                                 this._state.Error(auxMessage, payloadStr);
                                 break;
@@ -272,6 +300,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                             // current file locked, and its length is as we found it.   
                             if (fileSet.Length == 2 && fileSet.First() == currentFilePath && IsUnlockedAtLength(currentFilePath, nextLineBeginsAtOffset, this._state))
                             {
+                                this._state.Debug($"{CNST_Shipper_Debug} Move forward to next file. [{fileSet[1]}].");
                                 GoogleCloudPubSubLogShipper.WriteBookmark(bookmark, 0, fileSet[1]);
                             }
 
@@ -291,6 +320,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                         // It is done event there is or not data to send: it is possible that our application is sending data at any time.
                         if (fileSet.Length > 2 && fileSet.Length > this._retainedFileCountLimit && fileSet.First() != currentFilePath)
                         {
+                            this._state.Debug($"{CNST_Shipper_Debug} File delete. [{fileSet[0]}].");
                             System.IO.File.Delete(fileSet[0]);
                         }
                         //--------------------------------------------
@@ -298,11 +328,15 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
                     }
                 }
-                while (count == this._batchPostingLimit);
+                while (count == this._batchPostingLimit || isSizeLimitOverflow);
+                // Batch data sending will be done while it is supposed to be more data to send...
+                //  ...because we have reached the posting limit.
+                //  ...because we have reached the size limit.
+
             }
             catch (Exception ex)
             {
-                string auxMessage = string.Format("Shipper: Exception while emitting periodic batch from {0}: {1}", this, ex);
+                string auxMessage = $"{CNST_Shipper_Error} Exception while emitting periodic batch. [{ex.Message}]";
                 SelfLog.WriteLine(auxMessage);
                 this._state.Error(auxMessage);
 
@@ -344,14 +378,14 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                 var errorCode = Marshal.GetHRForException(ex) & ((1 << 16) - 1);
                 if (errorCode != 32 && errorCode != 33)
                 {
-                    string auxMessage = string.Format("Shipper: Unexpected I/O exception while testing locked status of {0}: {1}", file, ex);
+                    string auxMessage = $"{CNST_Shipper_Error} Unexpected I/O exception while testing locked status of {file}: {ex.Message}";
                     SelfLog.WriteLine(auxMessage);
                     state.Error(auxMessage);
                 }
             }
             catch (Exception ex)
             {
-                string auxMessage = string.Format("Shipper: Unexpected exception while testing locked status of {0}: {1}", file, ex);
+                string auxMessage = $"{CNST_Shipper_Error} Unexpected exception while testing locked status of {file}: {ex.Message}";
                 SelfLog.WriteLine(auxMessage);
                 state.Error(auxMessage);
             }

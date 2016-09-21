@@ -176,15 +176,14 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
 
         //*******************************************************************
-        //      ERROR LOG AND AUXILIARY FUNCTIONS
+        //      ERROR/DEBUG LOG AND AUXILIARY FUNCTIONS
         //*******************************************************************
 
         #region
 
         public void Error(string message)
         {
-            List<string> dumyPayloadStr = null;
-            this.Error(message, dumyPayloadStr);
+            this._ErrorDebugStore(message, null, false);
         }
 
         public void Error(string message, string simplePayloadStr)
@@ -196,38 +195,78 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
         public void Error(string message, List<string> payloadStr)
         {
-            // This method stored an error (if necessary).
+            try
+            {
+                bool savePayload = ((this._options.ErrorStoreEvents || this._options.DebugStoreAll));
+                this._ErrorDebugStore(message, payloadStr, savePayload);
+            }
+            catch (Exception ex)
+            {
+                //If any problem it will be ignored.
+            }
+        }
+
+        //---
+
+        public void Debug(string message)
+        {
+            if (this.Options.DebugStoreAll)
+            {
+                this._ErrorDebugStore(message, null, false);
+            }
+        }
+
+        public void Debug(string message, List<string> payloadStr)
+        {
+            if (this.Options.DebugStoreAll)
+            {
+                this._ErrorDebugStore(message, payloadStr, true);
+            }
+        }
+
+        //---
+
+        public void DebugOverflow(string message, int count, int batchPostingLimit, long payloadSizeByte, long? batchSizeLimitByte)
+        {
+            try
+            {
+                if (this.Options.DebugStoreAll || this.Options.DebugStoreBatchLimitsOverflows)
+                {
+                    string overflowMessage = $"{message} Overflow. // Events in payload={count} with limit={batchPostingLimit} // Size (bytes) of payload={payloadSizeByte} with limit={(batchSizeLimitByte == null ? "no limit" : batchSizeLimitByte.Value.ToString())}";
+                    this._ErrorDebugStore(overflowMessage, null, false);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        //---
+
+        public void _ErrorDebugStore(string message, List<string> payloadStr, bool savePayload)
+        {
+            // This method stores an error or debug information (if necessary).
             try
             {
                 if (this._errorsRollingFileSink != null && !string.IsNullOrEmpty(message))
                 {
-                    if (this._options.ErrorStoreEvents && payloadStr != null)
-                    {
-                        this._errorsRollingFileSink.Emit(this._CreateErrorLogEvent("---------------------------------------------"));
-                    }
-
-                    //---------
-
                     this._errorsRollingFileSink.Emit(this._CreateErrorLogEvent(message));
-                    
-                    //---------
 
-                    if (this._options.ErrorStoreEvents && payloadStr != null)
+                    if (savePayload)
                     {
-                        this._errorsRollingFileSink.Emit(this._CreateErrorLogEvent(" ---Events---"));
-
-                        if (payloadStr.Count > 0)
+                        if (payloadStr != null && payloadStr.Count > 0)
                         {
+                            this._errorsRollingFileSink.Emit(this._CreateErrorLogEvent(" ---Events---"));
                             foreach (string str in payloadStr)
                             {
                                 this._errorsRollingFileSink.Emit(this._CreateErrorLogEvent(str));
                             }
+                            this._errorsRollingFileSink.Emit(this._CreateErrorLogEvent(" ----end-----"));
                         }
                         else
                         {
-                            this._errorsRollingFileSink.Emit(this._CreateErrorLogEvent("There are no events to send."));
+                            this._errorsRollingFileSink.Emit(this._CreateErrorLogEvent(" ---Events: there are no events.---"));
                         }
-                        
                     }
                 }
             }

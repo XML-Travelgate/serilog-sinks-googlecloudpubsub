@@ -82,7 +82,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         #endregion
 
 
-        #region ------ Durable settings (using buffer file on disk) ------------------------
+        #region ------ Durable Batching settings (using buffer file on disk) ------------------------
 
         /// <summary>
         /// The interval between checking the buffer files.
@@ -114,17 +114,17 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         #endregion
 
 
-        #region ------ Errors storage settings (using file on disk) ------------------------
+        #region ------ Errors and Debug storage settings (using file on disk) ------------------------
 
         /// <summary>
-        /// Path to directory that can be used as a log shipping for storing internal errors.
-        /// If set then it means we want to store errors.
+        /// Path to directory that can be used as a log for storing internal errors and debuf information.
+        /// If set then it means we want to store errors and/or debug information.
         /// It can be used the same path as the buffer log (BufferBaseFilename) but the file name can't start with the same string.
         /// </summary>
         public string ErrorBaseFilename { get; set; }
 
         /// <summary>
-        /// The maximum size, in bytes, to which the error file for a specific date will be allowed to grow. By default no limit will be applied.
+        /// The maximum size, in bytes, to which the error/debug file for a specific date will be allowed to grow. By default no limit will be applied.
         /// </summary>
         public long? ErrorFileSizeLimitBytes { get; set; }
 
@@ -132,6 +132,16 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// If set to 'true' then events related to any error will be saved to the error file (after the error message).
         /// </summary>
         public bool ErrorStoreEvents { get; set; }
+
+        /// <summary>
+        /// If set to 'true' then overflows when creating batch posts will be stored (overflows for BatchPostingLimit and also for BatchSizeLimitBytes).
+        /// </summary>
+        public bool DebugStoreBatchLimitsOverflows { get; set; }
+
+        /// <summary>
+        /// If set to 'true' then debug data will be stored.
+        /// </summary>
+        public bool DebugStoreAll { get; set; }
 
         #endregion
 
@@ -197,7 +207,9 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             LogEventLevel minimumLogEventLevel = LevelAlias.Minimum,
             string errorBaseFilename = null,
             long? errorFileSizeLimitBytes = null,
-            bool? errorStoreEvents = null)
+            bool? errorStoreEvents = null,
+            bool? debugStoreBatchLimitsOverflows = null,
+            bool? debugStoreAll = null)
         {
             this.BufferBaseFilename = bufferBaseFilename;
             this.ErrorBaseFilename = errorBaseFilename;
@@ -234,6 +246,11 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             if (errorStoreEvents != null)
                 this.ErrorStoreEvents = errorStoreEvents.Value;
 
+            if (debugStoreBatchLimitsOverflows != null)
+                this.DebugStoreBatchLimitsOverflows = debugStoreBatchLimitsOverflows.Value;
+
+            if (debugStoreAll != null)
+                this.DebugStoreAll = debugStoreAll.Value;
         }
 
 

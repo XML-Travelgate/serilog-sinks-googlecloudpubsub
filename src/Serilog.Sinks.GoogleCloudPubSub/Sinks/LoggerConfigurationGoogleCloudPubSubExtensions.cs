@@ -54,6 +54,8 @@ namespace Serilog
         /// If set then it means we want to store errors. It can be used the same path as the buffer log (bufferBaseFilename) but the file name can't start with the same string.</param>
         /// <param name="errorFileSizeLimitBytes">The maximum size, in bytes, to which the error file for a specific date will be allowed to grow. By default no limit will be applied.</param>
         /// <param name="errorStoreEvents">If set to 'true' then events related to any error will be saved to the error file (after the error message). Pass null for default value (false).</param>
+        /// <param name="debugStoreBatchLimitsOverflows">If set to 'true' then overflows when creating batch posts will be stored (overflows for BatchPostingLimit and also for BatchSizeLimitBytes). Pass null for default value (false).</param>
+        /// <param name="debugStoreAll">If set to 'true' then debug data will be stored. Pass null for default value (false).</param>
         /// <returns>LoggerConfiguration object</returns>
         /// <exception cref="ArgumentNullException"><paramref name="projectId"/> is <see langword="null" />.</exception>
         /// <exception cref="ArgumentNullException"><paramref name="topicId"/> is <see langword="null" />.</exception>
@@ -72,7 +74,9 @@ namespace Serilog
             LogEventLevel minimumLogEventLevel = LevelAlias.Minimum,
             string errorBaseFilename = null,
             long? errorFileSizeLimitBytes = null,
-            bool? errorStoreEvents = null)
+            bool? errorStoreEvents = null,
+            bool? debugStoreBatchLimitsOverflows = null,
+            bool? debugStoreAll = null)
         {
 
             //--- Creating an options object with the received parameters -------------
@@ -90,7 +94,9 @@ namespace Serilog
                 minimumLogEventLevel,
                 errorBaseFilename,
                 errorFileSizeLimitBytes,
-                errorStoreEvents);
+                errorStoreEvents,
+                debugStoreBatchLimitsOverflows,
+                debugStoreAll);
 
 
             //--- Mandatory parameters ------------
