@@ -260,12 +260,12 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
                         //--- 3rd step : send data (if we have any) and update bookmark ------------------------------------------------------
 
-                        this._state.Debug($"{CNST_Shipper_Debug} Payload to send ({payloadSizeByte} bytes)...", payloadStr);
-
                         // Do we have data to send?
                         if (count > 0)
                         {
                             // ...yes, we have data, so come on...
+
+                            this._state.Debug($"{CNST_Shipper_Debug} Payload to send ({count} lines, {payloadSizeByte} bytes)...", payloadStr);
 
                             //--- Sending data to Google PubSub... ------------
                             GoogleCloudPubSubClientResponse response = this._state.Publish(payloadStr);

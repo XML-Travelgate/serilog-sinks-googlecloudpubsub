@@ -345,22 +345,22 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
                     this._errorsRollingFileSink.Emit(this._CreateErrorLogEvent(timeStamp + message));
 
-                    if (savePayload)
-                    {
-                        if (payloadStr != null && payloadStr.Count > 0)
-                        {
-                            this._errorsRollingFileSink.Emit(this._CreateErrorLogEvent(" ---Events---"));
-                            foreach (string str in payloadStr)
-                            {
-                                this._errorsRollingFileSink.Emit(this._CreateErrorLogEvent(str));
-                            }
-                            this._errorsRollingFileSink.Emit(this._CreateErrorLogEvent(" ----end-----"));
-                        }
-                        else
-                        {
-                            this._errorsRollingFileSink.Emit(this._CreateErrorLogEvent(" ---Events: there are no events.---"));
-                        }
-                    }
+                    //if (savePayload)
+                    //{
+                    //    if (payloadStr != null && payloadStr.Count > 0)
+                    //    {
+                    //        this._errorsRollingFileSink.Emit(this._CreateErrorLogEvent(" ---Events---"));
+                    //        foreach (string str in payloadStr)
+                    //        {
+                    //            this._errorsRollingFileSink.Emit(this._CreateErrorLogEvent(str));
+                    //        }
+                    //        this._errorsRollingFileSink.Emit(this._CreateErrorLogEvent(" ----end-----"));
+                    //    }
+                    //    else
+                    //    {
+                    //        this._errorsRollingFileSink.Emit(this._CreateErrorLogEvent(" ---Events: there are no events.---"));
+                    //    }
+                    //}
                 }
             }
             catch (Exception ex)
