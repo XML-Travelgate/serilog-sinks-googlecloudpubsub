@@ -152,7 +152,21 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// <summary>
         /// If set to 'true' then data on PubSub messages is converted to Base64. The default value is 'true'.
         /// </summary>
-        public bool DataToBase64 { get; set; }
+        public bool MessageDataToBase64 { get; set; }
+
+        /// <summary>
+        /// Fields separator in event data.
+        /// </summary>
+        public string EventFieldSeparator { get; set; }
+
+        /// <summary>
+        /// If given indicates that the PubSub message has to contain an attribute that is obtained as the MIN value for a concret field in the event dada.
+        /// This value has to be the field position (0 base), the separator "#" and the name to give to the PubSub message attribute.
+        /// It is mandatory to specify the fields separador with the property EventFieldSeparator.
+        /// If there is any problem then no attribute will be added to the message.
+        /// The fiel where to get the MIN value will be treated as an string. Null values will be omitted.
+        /// </summary>
+        public string MessageAttrMinValue { get; set; }
 
         #endregion
 
@@ -185,7 +199,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             this.BufferFileExtension = ".csv";
             this.BufferLogShippingInterval = TimeSpan.FromSeconds(2);
             this.Period = TimeSpan.FromSeconds(2);
-            this.DataToBase64 = true;
+            this.MessageDataToBase64 = true;
         }
 
         /// <summary>
@@ -221,7 +235,9 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             bool? errorStoreEvents = null,
             bool? debugStoreBatchLimitsOverflows = null,
             bool? debugStoreAll = null,
-            bool? dataToBase64 = null)
+            bool? messageDataToBase64 = null,
+            string eventFieldSeparator = null,
+            string messageAttrMinValue = null)
         {
             this.BufferBaseFilename = bufferBaseFilename;
             this.ErrorBaseFilename = errorBaseFilename;
@@ -265,9 +281,15 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                 this.DebugStoreAll = debugStoreAll.Value;
 
             //---
-            if (dataToBase64 != null)
-                this.DataToBase64 = dataToBase64.Value;
 
+            if (messageDataToBase64 != null)
+                this.MessageDataToBase64 = messageDataToBase64.Value;
+
+            if (!string.IsNullOrEmpty(eventFieldSeparator))
+                this.EventFieldSeparator = eventFieldSeparator;
+
+            if (!string.IsNullOrEmpty(messageAttrMinValue))
+                this.MessageAttrMinValue = messageAttrMinValue;
         }
 
 

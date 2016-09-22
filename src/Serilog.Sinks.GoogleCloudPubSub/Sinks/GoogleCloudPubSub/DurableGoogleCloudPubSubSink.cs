@@ -88,7 +88,9 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// <param name="errorStoreEvents">If set to 'true' then events related to any error will be saved to the error file (after the error message). Pass null for default value (false).</param>
         /// <param name="debugStoreBatchLimitsOverflows">If set to 'true' then overflows when creating batch posts will be stored (overflows for BatchPostingLimit and also for BatchSizeLimitBytes). Pass null for default value (false).</param>
         /// <param name="debugStoreAll">If set to 'true' then debug data will be stored. Pass null for default value (false).</param>
-        /// <param name="dataToBase64">If set to 'true' then data on PubSub messages is converted to Base64. Pass null for default value (true).</param>
+        /// <param name="messageDataToBase64">If set to 'true' then data on PubSub messages is converted to Base64. Pass null for default value (true).</param>
+        /// <param name="eventFieldSeparator">Fields seperator in event data.</param>
+        /// <param name="messageAttrMinValue">If given indicates that the PubSub message has to contain an attribute that is obtained as the MIN value for a concret field in the event dada.</param>
         /// <returns>LoggerConfiguration object</returns>
         /// <exception cref="ArgumentNullException"><paramref name="projectId"/> is <see langword="null" />.</exception>
         /// <exception cref="ArgumentNullException"><paramref name="topicId"/> is <see langword="null" />.</exception>
@@ -109,7 +111,9 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             bool? errorStoreEvents = null,
             bool? debugStoreBatchLimitsOverflows = null,
             bool? debugStoreAll = null,
-            bool? dataToBase64 = null)
+            bool? messageDataToBase64 = null,
+            string eventFieldSeparator = null,
+            string messageAttrMinValue = null)
         {
 
             //--- Creating an options object with the received parameters -------------
@@ -130,7 +134,9 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                 errorStoreEvents,
                 debugStoreBatchLimitsOverflows,
                 debugStoreAll,
-                dataToBase64);
+                messageDataToBase64,
+                eventFieldSeparator,
+                messageAttrMinValue);
 
             //-----
 

@@ -71,6 +71,10 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         public ITextFormatter PeriodicBatchingFormatter { get { return this._periodicBatchingFormatter; } }
         public ITextFormatter DurableFormatter { get { return this._durableFormatter; } }
         public GoogleCloudPubSubSinkOptions Options { get { return this._options; } }
+
+        private readonly bool _attrMinCreate = false;
+        private readonly int _attrMinPosition = -1;
+        private readonly string _attrMinName = string.Empty;
         #endregion
 
 
@@ -98,6 +102,26 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
             this._topic = PublisherClient.FormatTopicName(options.ProjectId, options.TopicId);
             this._client = PublisherClient.Create();
+
+            //---
+
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(this.Options.EventFieldSeparator) && !string.IsNullOrWhiteSpace(this.Options.MessageAttrMinValue))
+                {
+                    string[] auxArray = this.Options.MessageAttrMinValue.Split(new char[] { '#' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (auxArray.Length == 2)
+                    {
+                        this._attrMinPosition = Int32.Parse(auxArray[0]);
+                        this._attrMinName = auxArray[1];
+                        this._attrMinCreate = true;
+                    }
+                }
+            }
+            catch
+            {
+                this._attrMinCreate = false;
+            }
         }
         #endregion
 
@@ -154,18 +178,30 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         public PubsubMessage ConvertToPubsubMessage(IEnumerable<string> dataList)
         {
             StringBuilder sb = new StringBuilder();
+            string attrMinValue = null;
 
             if (dataList != null)
             {
                 foreach (string data in dataList)
                 {
                     sb.AppendLine(data);
+
+                    //---
+
+                    if (this._attrMinCreate)
+                    {
+                        attrMinValue = this._CalculateMinValue(attrMinValue, data);
+                    }
                 }
             }
+             
+            //---
 
             PubsubMessage message = new PubsubMessage();
 
-            if (this.Options.DataToBase64)
+            //---
+
+            if (this.Options.MessageDataToBase64)
             {
                 message.Data = ByteString.FromBase64(Convert.ToBase64String(Encoding.UTF8.GetBytes(sb.ToString())));
             }
@@ -173,30 +209,57 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             {
                 message.Data = ByteString.CopyFromUtf8(sb.ToString());
             }
-            
+
+            if (this._attrMinCreate)
+            {
+                message.Attributes.Add(this._attrMinName, (attrMinValue == null ? string.Empty : attrMinValue));
+            }
+
+            //---
 
             return message;
         }
 
-        public List<PubsubMessage> ConvertToPubsubMessageList(IEnumerable<string> dataList)
-        {
-            List<PubsubMessage> messages = new List<PubsubMessage>();
+        //public List<PubsubMessage> ConvertToPubsubMessageList(IEnumerable<string> dataList)
+        //{
+        //    List<PubsubMessage> messages = new List<PubsubMessage>();
 
-            if (dataList != null)
+        //    if (dataList != null)
+        //    {
+        //        foreach (string data in dataList)
+        //        {
+        //            messages.Add(
+        //                new PubsubMessage
+        //                {
+        //                    // The data is any arbitrary ByteString. Here, we're using text.
+        //                    Data = ByteString.CopyFromUtf8(data)
+        //                }
+        //            );
+        //        }
+        //    }
+
+        //    return messages;
+        //}
+
+        private string _CalculateMinValue(string attrMinValue, string data)
+        {
+            try
             {
-                foreach (string data in dataList)
+                string[] auxArray = data.Split(new string[] { this.Options.EventFieldSeparator }, StringSplitOptions.RemoveEmptyEntries);
+                if (auxArray.Length > this._attrMinPosition)
                 {
-                    messages.Add(
-                        new PubsubMessage
-                        {
-                            // The data is any arbitrary ByteString. Here, we're using text.
-                            Data = ByteString.CopyFromUtf8(data)
-                        }
-                    );
+                    string currentDataValue = auxArray[this._attrMinPosition];
+                    if (!string.IsNullOrWhiteSpace(currentDataValue) && (attrMinValue == null || currentDataValue.CompareTo(attrMinValue) < 0))
+                    {
+                        return currentDataValue;
+                    }
                 }
             }
+            catch
+            {    
+            }
 
-            return messages;
+            return attrMinValue;
         }
 
         #endregion
