@@ -19,6 +19,7 @@ using Serilog.Formatting;
 using Google.Pubsub.V1;
 using Google.Protobuf;
 using Serilog.Sinks.RollingFile;
+using System.Text;
 
 namespace Serilog.Sinks.GoogleCloudPubSub
 {
@@ -113,7 +114,6 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         {
             // This method sends data to Google PubSub using Google.Pubsub.V1.
 
-            //return await this._client.PublishAsync(this._topic, messages);
             try
             {
                 PublishResponse response = await this._client.PublishAsync(this._topic, messages);
@@ -140,25 +140,53 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             }
         }
 
-        public GoogleCloudPubSubClientResponse Publish(IEnumerable<string> messagesStr)
+        public GoogleCloudPubSubClientResponse Publish(IEnumerable<string> dataList)
         {
-            // This method converts and sends data to Google PubSub.
-
-            List<PubsubMessage> payload = this.ConvertToPubsubMessageList(messagesStr);
-            return this.Publish(payload);
+            // This method converts and sends data to Google PubSub: creates a unique message containing all the payload information.
+            PubsubMessage message = this.ConvertToPubsubMessage(dataList);
+            List<PubsubMessage> messages = new List<PubsubMessage>();
+            messages.Add(message);
+            return this.Publish(messages);
         }
 
         //---------
 
-        public List<PubsubMessage> ConvertToPubsubMessageList (IEnumerable<string> dataList)
+        public PubsubMessage ConvertToPubsubMessage(IEnumerable<string> dataList)
         {
-            List<PubsubMessage> payload = new List<PubsubMessage>();
+            StringBuilder sb = new StringBuilder();
 
             if (dataList != null)
             {
                 foreach (string data in dataList)
                 {
-                    payload.Add(
+                    sb.AppendLine(data);
+                }
+            }
+
+            PubsubMessage message = new PubsubMessage();
+
+            if (this.Options.DataToBase64)
+            {
+                message.Data = ByteString.FromBase64(Convert.ToBase64String(Encoding.UTF8.GetBytes(sb.ToString())));
+            }
+            else
+            {
+                message.Data = ByteString.CopyFromUtf8(sb.ToString());
+            }
+            
+
+            return message;
+        }
+
+        public List<PubsubMessage> ConvertToPubsubMessageList(IEnumerable<string> dataList)
+        {
+            List<PubsubMessage> messages = new List<PubsubMessage>();
+
+            if (dataList != null)
+            {
+                foreach (string data in dataList)
+                {
+                    messages.Add(
                         new PubsubMessage
                         {
                             // The data is any arbitrary ByteString. Here, we're using text.
@@ -168,7 +196,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                 }
             }
 
-            return payload;
+            return messages;
         }
 
         #endregion
@@ -250,7 +278,9 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             {
                 if (this._errorsRollingFileSink != null && !string.IsNullOrEmpty(message))
                 {
-                    this._errorsRollingFileSink.Emit(this._CreateErrorLogEvent(message));
+                    string timeStamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff") + " ";
+
+                    this._errorsRollingFileSink.Emit(this._CreateErrorLogEvent(timeStamp + message));
 
                     if (savePayload)
                     {

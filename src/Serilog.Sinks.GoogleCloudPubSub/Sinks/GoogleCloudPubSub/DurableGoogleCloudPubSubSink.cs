@@ -88,6 +88,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// <param name="errorStoreEvents">If set to 'true' then events related to any error will be saved to the error file (after the error message). Pass null for default value (false).</param>
         /// <param name="debugStoreBatchLimitsOverflows">If set to 'true' then overflows when creating batch posts will be stored (overflows for BatchPostingLimit and also for BatchSizeLimitBytes). Pass null for default value (false).</param>
         /// <param name="debugStoreAll">If set to 'true' then debug data will be stored. Pass null for default value (false).</param>
+        /// <param name="dataToBase64">If set to 'true' then data on PubSub messages is converted to Base64. Pass null for default value (true).</param>
         /// <returns>LoggerConfiguration object</returns>
         /// <exception cref="ArgumentNullException"><paramref name="projectId"/> is <see langword="null" />.</exception>
         /// <exception cref="ArgumentNullException"><paramref name="topicId"/> is <see langword="null" />.</exception>
@@ -107,7 +108,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             long? errorFileSizeLimitBytes = null,
             bool? errorStoreEvents = null,
             bool? debugStoreBatchLimitsOverflows = null,
-            bool? debugStoreAll = null)
+            bool? debugStoreAll = null,
+            bool? dataToBase64 = null)
         {
 
             //--- Creating an options object with the received parameters -------------
@@ -127,7 +129,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                 errorFileSizeLimitBytes,
                 errorStoreEvents,
                 debugStoreBatchLimitsOverflows,
-                debugStoreAll);
+                debugStoreAll,
+                dataToBase64);
 
             //-----
 

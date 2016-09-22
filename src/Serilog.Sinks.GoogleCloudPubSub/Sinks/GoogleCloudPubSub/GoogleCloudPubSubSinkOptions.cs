@@ -147,6 +147,16 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
 
 
+        #region ------ Settings for data management ------------------------
+
+        /// <summary>
+        /// If set to 'true' then data on PubSub messages is converted to Base64. The default value is 'true'.
+        /// </summary>
+        public bool DataToBase64 { get; set; }
+
+        #endregion
+
+
         //TODO: Temporally not used: 
         /////<summary>
         ///// Throw LoggingException if  error publishing messages
@@ -175,6 +185,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             this.BufferFileExtension = ".csv";
             this.BufferLogShippingInterval = TimeSpan.FromSeconds(2);
             this.Period = TimeSpan.FromSeconds(2);
+            this.DataToBase64 = true;
         }
 
         /// <summary>
@@ -209,7 +220,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             long? errorFileSizeLimitBytes = null,
             bool? errorStoreEvents = null,
             bool? debugStoreBatchLimitsOverflows = null,
-            bool? debugStoreAll = null)
+            bool? debugStoreAll = null,
+            bool? dataToBase64 = null)
         {
             this.BufferBaseFilename = bufferBaseFilename;
             this.ErrorBaseFilename = errorBaseFilename;
@@ -251,6 +263,11 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
             if (debugStoreAll != null)
                 this.DebugStoreAll = debugStoreAll.Value;
+
+            //---
+            if (dataToBase64 != null)
+                this.DataToBase64 = dataToBase64.Value;
+
         }
 
 

@@ -46,6 +46,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
         private static string CNST_Shipper_Error = "Shipper [Error]: ";
         private static string CNST_Shipper_Debug = "Shipper [Debug]: ";
+
+        private static readonly int CNST_NewLineBytes = Encoding.UTF8.GetByteCount(Environment.NewLine);
         #endregion
 
 
@@ -69,7 +71,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             this._timer = new Timer(s => OnTick());
             
             AppDomain.CurrentDomain.DomainUnload += OnAppDomainUnloading;
-            AppDomain.CurrentDomain.ProcessExit += OnAppDomainUnloading;
+            AppDomain.CurrentDomain.ProcessExit += OnAppDomainUnloading;          
 
             SetTimer();
         }
@@ -197,9 +199,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                                 previousBeginsAtOffset = nextLineBeginsAtOffset;
 
                                 // Is there a next line to send? ...
-                                if (GoogleCloudPubSubLogShipper.TryReadLine(current, ref nextLineBeginsAtOffset, out nextLine))
+                                if (GoogleCloudPubSubLogShipper.TryReadLine(current, ref nextLineBeginsAtOffset, out nextLine, out nextlineSizeByte))
                                 {
-                                    nextlineSizeByte = Encoding.UTF8.GetByteCount(nextLine);
 
                                     // Is there space enough to send the next line in this batch? ...
                                     if (this._batchSizeLimitBytes == null || 
@@ -237,6 +238,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                                             nextLineBeginsAtOffset = previousBeginsAtOffset;
                                         }
                                     }
+
                                 }
                                 else
                                 {
@@ -401,9 +403,10 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             }
         }
 
-        static bool TryReadLine(Stream current, ref long nextStart, out string nextLine)
+        static bool TryReadLine(Stream current, ref long nextStart, out string nextLine, out long nextlineSizeByte)
         {
             //var includesBom = nextStart == 0;
+            nextlineSizeByte = 0;
 
             if (current.Length <= nextStart)
             {
@@ -420,7 +423,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             if (nextLine == null)
                 return false;
 
-            nextStart += Encoding.UTF8.GetByteCount(nextLine) + Encoding.UTF8.GetByteCount(Environment.NewLine);
+            nextlineSizeByte = Encoding.UTF8.GetByteCount(nextLine) + CNST_NewLineBytes;
+            nextStart += nextlineSizeByte;
 
             //if (includesBom)
             //    nextStart += 3;
