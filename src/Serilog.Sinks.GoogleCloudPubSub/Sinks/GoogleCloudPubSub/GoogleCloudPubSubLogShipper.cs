@@ -130,6 +130,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             {
                 var count = 0;
                 bool isSizeLimitOverflow = false;
+                bool hasMoreLines = true;
 
                 do
                 {
@@ -184,6 +185,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                         long payloadSizeByte = 0;
                         count = 0;
                         isSizeLimitOverflow = false;
+                        hasMoreLines = true;
 
                         using (var current = System.IO.File.Open(currentFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                         {
@@ -194,7 +196,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                             bool continueAdding = true;
                             long previousBeginsAtOffset;   
 
-                            while (count < this._batchPostingLimit && continueAdding)
+                            while (count < this._batchPostingLimit && continueAdding && hasMoreLines)
                             {
                                 previousBeginsAtOffset = nextLineBeginsAtOffset;
 
@@ -242,7 +244,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                                 }
                                 else
                                 {
-                                    continueAdding = false;
+                                    // There is no more data to add to this batch.
+                                    hasMoreLines = false;
                                 }
 
                             } //---end:while---
@@ -276,19 +279,30 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                                 //--- OK ---
                                 GoogleCloudPubSubLogShipper.WriteBookmark(bookmark, nextLineBeginsAtOffset, currentFilePath);
                                 this._connectionSchedule.MarkSuccess();
-
+                                //---
                                 this._state.Debug($"{CNST_Shipper_Debug} Data sent OK to PubSub.");
                             }
                             else
                             {
                                 //--- ERROR ---
                                 this._connectionSchedule.MarkFailure();
+                                //---
                                 auxMessage = $"{CNST_Shipper_Error} Data sent ERROR to PubSub. [{response.ErrorMessage}]";
                                 SelfLog.WriteLine(auxMessage);
                                 this._state.Error(auxMessage, payloadStr);
                                 break;
                             }
                            
+                        }
+                        else if (isSizeLimitOverflow)
+                        {
+                            // ...no, we don't have data to send, but...
+
+                            // We don't have sent anything to PubSub but an overflow has been detected. This means that there was almost
+                            // one line to send and all were bigger than the size limit.
+                            // In this case we have to update the bookmark too: if not then next tick will start with this same big line.
+                            GoogleCloudPubSubLogShipper.WriteBookmark(bookmark, nextLineBeginsAtOffset, currentFilePath);
+                            this._connectionSchedule.MarkSuccess();
                         }
                         else
                         {
@@ -330,7 +344,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
                     }
                 }
-                while (count == this._batchPostingLimit || isSizeLimitOverflow);
+                while ((count == this._batchPostingLimit || isSizeLimitOverflow) && hasMoreLines);
                 // Batch data sent will be done while it is supposed to be more data to send...
                 //  ...because we have reached the posting limit.
                 //  ...because we have reached the size limit.

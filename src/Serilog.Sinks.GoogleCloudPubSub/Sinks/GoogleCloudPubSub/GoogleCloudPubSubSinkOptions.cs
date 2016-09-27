@@ -196,7 +196,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             this.BatchPostingLimit = 50; 
             this.CustomFormatter = new GoogleCloudPubSubRawFormatter();     // Default formatter: raw data.
             //TODO: Temporally not used: this.ThrowPublishExceptions = true;
-            this.BufferFileExtension = ".csv";
+            this.BufferFileExtension = ".swap";
             this.BufferLogShippingInterval = TimeSpan.FromSeconds(2);
             this.Period = TimeSpan.FromSeconds(2);
             this.MessageDataToBase64 = true;
