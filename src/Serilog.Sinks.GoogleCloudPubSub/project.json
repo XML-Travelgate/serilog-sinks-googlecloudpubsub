@@ -16,7 +16,7 @@
       "dependencies": {
         "Serilog": "2.2.1",
         "Serilog.Sinks.PeriodicBatching": "2.0.0",
-        "Serilog.Sinks.RollingFile": "2.2.0",
+        "Serilog.Sinks.RollingFile": "3.0.1",
         "Google.Pubsub.V1": "1.0.0-beta02"
       }
     },
@@ -24,7 +24,7 @@
       "dependencies": {
         "Serilog": "2.2.1",
         "Serilog.Sinks.PeriodicBatching": "2.0.0",
-        "Serilog.Sinks.RollingFile": "2.2.0",
+        "Serilog.Sinks.RollingFile": "3.0.1",
         "Google.Pubsub.V1": "1.0.0-beta02"
       }
     }

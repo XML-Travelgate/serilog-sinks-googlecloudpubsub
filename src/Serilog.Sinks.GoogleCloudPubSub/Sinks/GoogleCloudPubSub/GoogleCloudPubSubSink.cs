@@ -80,12 +80,14 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         protected override async Task EmitBatchAsync(IEnumerable<LogEvent> events)
         {
             var payload = new List<PubsubMessage>();
-            foreach (var logEvent in events){
-                 StringWriter sw = new StringWriter();
-                 this._state.PeriodicBatchingFormatter.Format( logEvent,sw );
+            foreach (var logEvent in events)
+            {
+                StringWriter sw = new StringWriter();
+                this._state.PeriodicBatchingFormatter.Format(logEvent, sw);
 
                 payload.Add(
-                    new PubsubMessage{
+                    new PubsubMessage
+                    {
                         // The data is any arbitrary ByteString. Here, we're using text.
                         Data = ByteString.CopyFromUtf8(sw.ToString())
                     }

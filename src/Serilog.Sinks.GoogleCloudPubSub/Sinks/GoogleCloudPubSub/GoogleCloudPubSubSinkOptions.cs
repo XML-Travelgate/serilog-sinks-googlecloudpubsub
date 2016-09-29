@@ -15,8 +15,7 @@
 using System;
 using Serilog.Formatting;
 using Serilog.Events;
-
-
+using System.Collections.Generic;
 
 namespace Serilog.Sinks.GoogleCloudPubSub
 {
@@ -111,6 +110,14 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// </summary>
         public int? BufferRetainedFileCountLimit { get; set; }
 
+        /// <summary>
+        /// If set to 'true' then the underlying stream will buffer writes to improve write performance.
+        /// If set to 'false' (default value) each event write will be flushed to disk individually at that moment.
+        /// IMPORTANT: activating the buffer doesn't guarantee events writing integrity. An event can be writen to disk not with its
+        /// full information (because the buffer is full and it has not space enought for all the event data) and then can be sent to PubSub in different messages.
+        /// </summary>
+        public bool BufferWriteIsBuffered { get; set; }
+
         #endregion
 
 
@@ -137,6 +144,11 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// If set to 'true' then overflows when creating batch posts will be stored (overflows for BatchPostingLimit and also for BatchSizeLimitBytes).
         /// </summary>
         public bool DebugStoreBatchLimitsOverflows { get; set; }
+
+        /// <summary>
+        /// If set to 'true' then skiped events (greater than the BatchSizeLimitBytes) will be stored.
+        /// </summary>
+        public bool DebugStoreEventSkip { get; set; }
 
         /// <summary>
         /// If set to 'true' then debug data will be stored.
@@ -167,6 +179,12 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// The fiel where to get the MIN value will be treated as an string. Null values will be omitted.
         /// </summary>
         public string MessageAttrMinValue { get; set; }
+
+        /// <summary>
+        /// If given then in each message to PubSub will be added as many attributes as elements has de dictionary, where
+        /// the key corresponds to an attribute name and the value corresponds to its value to set.
+        /// </summary>
+        public Dictionary<string,string> MessageAttrFixed { get; set; }
 
         #endregion
 
@@ -200,6 +218,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             this.BufferLogShippingInterval = TimeSpan.FromSeconds(2);
             this.Period = TimeSpan.FromSeconds(2);
             this.MessageDataToBase64 = true;
+            this.BufferWriteIsBuffered = false;
         }
 
         /// <summary>
@@ -237,7 +256,10 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             bool? debugStoreAll = null,
             bool? messageDataToBase64 = null,
             string eventFieldSeparator = null,
-            string messageAttrMinValue = null)
+            string messageAttrMinValue = null,
+            bool? bufferWriteIsBuffered = null,
+            Dictionary<string, string> messageAttrFixed = null,
+            bool? debugStoreEventSkip = null)
         {
             this.BufferBaseFilename = bufferBaseFilename;
             this.ErrorBaseFilename = errorBaseFilename;
@@ -258,6 +280,9 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             if (!string.IsNullOrEmpty(bufferFileExtension))
                 this.BufferFileExtension = bufferFileExtension;
 
+            if (bufferWriteIsBuffered != null)
+                this.BufferWriteIsBuffered = bufferWriteIsBuffered.Value;
+            
             //---
 
             if (batchPostingLimit != null)
@@ -280,6 +305,10 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             if (debugStoreAll != null)
                 this.DebugStoreAll = debugStoreAll.Value;
 
+            if (debugStoreEventSkip != null)
+                this.DebugStoreEventSkip = debugStoreEventSkip.Value;
+            
+
             //---
 
             if (messageDataToBase64 != null)
@@ -290,6 +319,10 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
             if (!string.IsNullOrEmpty(messageAttrMinValue))
                 this.MessageAttrMinValue = messageAttrMinValue;
+
+            if (messageAttrFixed != null)
+                this.MessageAttrFixed = messageAttrFixed;
+            
         }
 
 

@@ -201,7 +201,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
             //---
 
-            if (this.Options.MessageDataToBase64)
+            if (this._options.MessageDataToBase64)
             {
                 message.Data = ByteString.FromBase64(Convert.ToBase64String(Encoding.UTF8.GetBytes(sb.ToString())));
             }
@@ -212,7 +212,15 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
             if (this._attrMinCreate)
             {
-                message.Attributes.Add(this._attrMinName, (attrMinValue == null ? string.Empty : attrMinValue));
+                message.Attributes.Add(this._attrMinName, (attrMinValue ?? string.Empty));
+            }
+
+            if (this._options.MessageAttrFixed != null)
+            {
+                foreach (KeyValuePair<string,string> kv in this._options.MessageAttrFixed)
+                {
+                    message.Attributes.Add(kv.Key, (kv.Value ?? string.Empty));
+                }
             }
 
             //---
@@ -325,6 +333,23 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                 {
                     string overflowMessage = $"{message} Overflow. // Events in payload={count} with limit={batchPostingLimit} // Size (bytes) of payload={payloadSizeByte} with limit={(batchSizeLimitByte == null ? "no limit" : batchSizeLimitByte.Value.ToString())}";
                     this._ErrorDebugStore(overflowMessage, null, false);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        //---
+
+        public void DebugEventSkip(string message, string eventData)
+        {
+            try
+            {
+                if (this.Options.DebugStoreAll || this.Options.DebugStoreEventSkip)
+                {
+                    string skipMessage = $"{message} Event skipped. // {eventData ?? "-no data-"}";
+                    this._ErrorDebugStore(skipMessage, null, false);
                 }
             }
             catch

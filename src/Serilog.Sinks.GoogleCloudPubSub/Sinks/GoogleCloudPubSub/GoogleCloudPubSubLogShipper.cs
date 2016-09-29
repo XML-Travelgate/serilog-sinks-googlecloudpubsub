@@ -36,6 +36,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         readonly int _batchPostingLimit;
         readonly long? _batchSizeLimitBytes;
         readonly int? _retainedFileCountLimit;
+        readonly bool _isBuffered;
         readonly Timer _timer;
         readonly ExponentialBackoffConnectionSchedule _connectionSchedule;
         readonly string _bookmarkFilename;
@@ -64,6 +65,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             this._batchPostingLimit = this._state.Options.BatchPostingLimit;
             this._batchSizeLimitBytes = this._state.Options.BatchSizeLimitBytes;
             this._retainedFileCountLimit = this._state.Options.BufferRetainedFileCountLimit;
+            this._isBuffered = this._state.Options.BufferWriteIsBuffered;
             this._bookmarkFilename = Path.GetFullPath(this._state.Options.BufferBaseFilename + ".bookmark");
             this._logFolder = Path.GetDirectoryName(this._bookmarkFilename);
             this._candidateSearchPath = Path.GetFileName(this._state.Options.BufferBaseFilename) + "*" + this._state.Options.BufferFileExtension;
@@ -226,7 +228,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                                                 // line will never be sent and would stop sending following lines in an infinite bucle).
                                                 auxMessage = $"{CNST_Shipper_Error} Line skipped because it is bigger ({nextlineSizeByte}) than BatchSizeLimitBytes ({this._batchSizeLimitBytes.Value}).";
                                                 SelfLog.WriteLine(auxMessage);
-                                                this._state.Error(auxMessage, nextLine);
+                                                this._state.Error(auxMessage);
+                                                this._state.DebugEventSkip(CNST_Shipper_Debug, nextLine);
                                             }
                                             catch
                                             {
@@ -332,8 +335,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
                         
                         //--- Retained File Count Limit --------------
-                        // If necessary, one obsolete fiel is deleted each time.
-                        // It is done event there is or not data to send: it is possible that our application is sending data at any time.
+                        // If necessary, one obsolete file is deleted each time.
+                        // It is done even there is or not data to send: it is possible that our application is sending data at any time.
                         if (fileSet.Length > 2 && fileSet.Length > this._retainedFileCountLimit && fileSet.First() != currentFilePath)
                         {
                             this._state.Debug($"{CNST_Shipper_Debug} File delete. [{fileSet[0]}].");
@@ -419,7 +422,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
         static bool TryReadLine(Stream current, ref long nextStart, out string nextLine, out long nextlineSizeByte)
         {
-            //var includesBom = nextStart == 0;
+            bool includesBom = (nextStart == 0);
             nextlineSizeByte = 0;
 
             if (current.Length <= nextStart)
@@ -440,8 +443,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             nextlineSizeByte = Encoding.UTF8.GetByteCount(nextLine) + CNST_NewLineBytes;
             nextStart += nextlineSizeByte;
 
-            //if (includesBom)
-            //    nextStart += 3;
+            if (includesBom)
+                nextStart += 3;
 
             return true;
         }

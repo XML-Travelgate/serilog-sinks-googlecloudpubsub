@@ -16,7 +16,7 @@ using System;
 using Serilog.Core;
 using Serilog.Events;
 using Serilog.Sinks.RollingFile;
-
+using System.Collections.Generic;
 
 namespace Serilog.Sinks.GoogleCloudPubSub
 {
@@ -91,6 +91,13 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// <param name="messageDataToBase64">If set to 'true' then data on PubSub messages is converted to Base64. Pass null for default value (true).</param>
         /// <param name="eventFieldSeparator">Fields seperator in event data.</param>
         /// <param name="messageAttrMinValue">If given indicates that the PubSub message has to contain an attribute that is obtained as the MIN value for a concret field in the event dada.</param>
+        /// <param name="bufferWriteIsBuffered">If set to 'true' then the underlying stream will buffer writes to improve write performance.
+        /// If set to 'false' (default value) each event write will be flushed to disk individually at that moment. Pass null for default value (false).
+        /// IMPORTANT: activating the buffer doesn't guarantee events writing integrity. An event can be writen to disk not with its
+        /// full information (because the buffer is full and it has not space enought for all the event data) and then can be sent to PubSub in different messages.</param>
+        /// <param name="messageAttrFixed">If given then in each message to PubSub will be added as many attributes as elements has de dictionary, where
+        /// the key corresponds to an attribute name and the value corresponds to its value to set.</param>
+        /// <param name="debugStoreEventSkip">If set to 'true' then skiped events (greater than the BatchSizeLimitBytes) will be stored.</param>
         /// <returns>LoggerConfiguration object</returns>
         /// <exception cref="ArgumentNullException"><paramref name="projectId"/> is <see langword="null" />.</exception>
         /// <exception cref="ArgumentNullException"><paramref name="topicId"/> is <see langword="null" />.</exception>
@@ -113,7 +120,10 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             bool? debugStoreAll = null,
             bool? messageDataToBase64 = null,
             string eventFieldSeparator = null,
-            string messageAttrMinValue = null)
+            string messageAttrMinValue = null,
+            bool? bufferWriteIsBuffered = null,
+            Dictionary<string, string> messageAttrFixed = null,
+            bool? debugStoreEventSkip = null)
         {
 
             //--- Creating an options object with the received parameters -------------
@@ -136,7 +146,10 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                 debugStoreAll,
                 messageDataToBase64,
                 eventFieldSeparator,
-                messageAttrMinValue);
+                messageAttrMinValue,
+                bufferWriteIsBuffered,
+                messageAttrFixed,
+                debugStoreEventSkip);
 
             //-----
 
@@ -160,7 +173,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             if (!string.IsNullOrWhiteSpace(options.ErrorBaseFilename))
             {
                 this._errorsRollingFileSink = new RollingFileSink(
-                        options.ErrorBaseFilename + FileNameSuffix + ".txt",
+                        options.ErrorBaseFilename + FileNameSuffix + ".log",
                         new GoogleCloudPubSubRawFormatter(),   // Formatter for error info (raw).
                         options.ErrorFileSizeLimitBytes,
                         null
@@ -180,8 +193,12 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                     options.BufferBaseFilename + FileNameSuffix + options.BufferFileExtension,
                     this._state.DurableFormatter,   // Formatter for data to insert into the buffer file.
                     options.BufferFileSizeLimitBytes,
-                    null
+                    null,
+                    encoding: System.Text.Encoding.UTF8,
+                    buffered: options.BufferWriteIsBuffered
                 );
+            // NOTE: if the encoding is set to UTF8 then the BOM is inserted into the file and has to be
+            //       taken in mind when reading from the file.
         }
 
 
