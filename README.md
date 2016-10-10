@@ -13,7 +13,7 @@ master | [![Build status](https://ci.appveyor.com/api/projects/status/afbwe9ssan
 
 - Based on https://github.com/serilog/serilog-sinks-seq and https://github.com/serilog/serilog-sinks-elasticsearch
 - Internally uses performing grpc communication via Google.Pubsub.V1
-- Durable (via RollingFile) and/or PeriodicBatching sink configuration
+- Durable (via RollingFile) sink configuration (PeriodicBatching not implemented yet).
 
 # Notes 
 
