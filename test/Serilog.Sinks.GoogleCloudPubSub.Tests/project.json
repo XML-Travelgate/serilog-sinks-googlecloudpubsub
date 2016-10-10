@@ -1,0 +1,21 @@
+{
+  "testRunner": "xunit",
+  "buildOptions":{
+     "copyToOutput": {
+            "include": [ "appsettings.json" ]
+        }
+  },
+  "dependencies": {
+    "xunit": "2.2.0-beta2-build3300",
+    "dotnet-test-xunit": "2.2.0-preview2-build1029",
+    "xunit.abstractions": "2.0.1",
+    "Microsoft.Extensions.Configuration.EnvironmentVariables": "1.0.0",
+    "Microsoft.Extensions.Configuration.Json": "1.0.0",
+    "Google.Pubsub.V1": "1.0.0-beta02",
+    "Serilog.Sinks.GoogleCloudPubSub": { "target": "project" }
+  },
+   "frameworks": { 
+      "net461":{
+      }
+   }
+}
