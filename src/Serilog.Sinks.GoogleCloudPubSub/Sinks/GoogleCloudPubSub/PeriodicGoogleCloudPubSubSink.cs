@@ -24,9 +24,9 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 {
    
     /// <summary>
-    /// Writes log events as records to a Google Cloud Pub Sub.
+    /// Writes log events as records to a Google Cloud Pub Sub using a periodic batching.
     /// </summary>
-    public class GoogleCloudPubSubSink : PeriodicBatchingSink
+    public class PeriodicGoogleCloudPubSubSink : PeriodicBatchingSink
     {
         //***TODO***
         // NOTE : 
@@ -56,7 +56,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// Construct a sink that saves logs to the specified Google PubSub account.
         /// </summary>
         /// <param name="options">Options configuring how the sink behaves, may NOT be null</param>
-        public GoogleCloudPubSubSink(GoogleCloudPubSubSinkOptions options )
+        public PeriodicGoogleCloudPubSubSink(GoogleCloudPubSubSinkOptions options )
             : base(options.BatchPostingLimit, options.Period)
         {
             this._state = GoogleCloudPubSubSinkState.Create(options, null);

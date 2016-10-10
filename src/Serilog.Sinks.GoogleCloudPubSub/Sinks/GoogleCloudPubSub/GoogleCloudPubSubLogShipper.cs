@@ -422,7 +422,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
         static bool TryReadLine(Stream current, ref long nextStart, out string nextLine, out long nextlineSizeByte)
         {
-            bool includesBom = (nextStart == 0);
+            //bool includesBom = (nextStart == 0);
             nextlineSizeByte = 0;
 
             if (current.Length <= nextStart)
@@ -443,8 +443,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             nextlineSizeByte = Encoding.UTF8.GetByteCount(nextLine) + CNST_NewLineBytes;
             nextStart += nextlineSizeByte;
 
-            if (includesBom)
-                nextStart += 3;
+            //if (includesBom)
+            //    nextStart += 3;
 
             return true;
         }

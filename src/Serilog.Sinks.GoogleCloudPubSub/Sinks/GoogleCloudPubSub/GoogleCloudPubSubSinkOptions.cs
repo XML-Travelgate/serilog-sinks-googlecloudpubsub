@@ -92,6 +92,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
         /// <summary>
         /// Path to directory that can be used as a log shipping buffer for increasing the reliability of the log forwarding.
+        /// It must not contain any rolling specifier.
         /// </summary>
         public string BufferBaseFilename { get; set; }
 
@@ -99,6 +100,11 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// Extension for the buffer files (will be added to the given BufferBaseFilename).
         /// </summary>
         public string BufferFileExtension { get; set; }
+
+        /// <summary>
+        /// Rolling specifier: {Date}, {Hour} or {HalfHour}. The default one is {Date}.
+        /// </summary>
+        public string BufferRollingSpecifier { get; set; }
 
         /// <summary>
         /// The maximum size, in bytes, to which the buffer file for a specific date will be allowed to grow. By default no limit will be applied.
@@ -127,6 +133,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// Path to directory that can be used as a log for storing internal errors and debuf information.
         /// If set then it means we want to store errors and/or debug information.
         /// It can be used the same path as the buffer log (BufferBaseFilename) but the file name can't start with the same string.
+        /// It must not contain any rolling specifier: it will use the same one set for the buffer file.
         /// </summary>
         public string ErrorBaseFilename { get; set; }
 
@@ -205,7 +212,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         #region
 
         /// <summary>
-        /// Configures the GoogleCloudPubSub sink defaults.
+        /// Configures the GoogleCloudPubSub sink default values.
         /// </summary>
         protected GoogleCloudPubSubSinkOptions()
         {
@@ -219,6 +226,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             this.Period = TimeSpan.FromSeconds(2);
             this.MessageDataToBase64 = true;
             this.BufferWriteIsBuffered = false;
+            this.BufferRollingSpecifier = "{Hour}";
         }
 
         /// <summary>
@@ -240,6 +248,31 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
         #region
 
+        /// <summary>
+        /// Sets the specified values.
+        /// </summary>
+        /// <param name="bufferBaseFilename">Path to directory and file name prefix that can be used as a log shipping buffer for increasing the reliability of the log forwarding.</param>
+        /// <param name="bufferFileSizeLimitBytes">The maximum size, in bytes, to which the buffer file for a specific date will be allowed to grow. 
+        /// Once the limit is reached no more events will be stored. Pass null for default value.</param>
+        /// <param name="bufferLogShippingIntervalMilisec">The interval, in miliseconds, between checking the buffer files. Pass null for default value.</param>
+        /// <param name="bufferRetainedFileCountLimit">The maximum number of buffer files that will be retained, including the current buffer file. Pass null for default value (no limit). The minimum value is 2.</param>
+        /// <param name="bufferFileExtension">The file extension to use with buffer files. Pass null for default value.</param>
+        /// <param name="batchPostingLimit">The maximum number of events to post in a single batch. Pass null for default value.</param>
+        /// <param name="batchSizeLimitBytes">The maximum size, in bytes, of the batch to send to PubSub. By default no limit will be applied.</param>
+        /// <param name="minimumLogEventLevel">The minimum log event level required in order to write an event to the sink. Pass null for default value.</param>
+        /// <param name="errorBaseFilename">Path to directory that can be used as a log shipping for storing internal errors.
+        /// If set then it means we want to store errors. It can be used the same path as the buffer log (bufferBaseFilename) but the file name can't start with the same string.</param>
+        /// <param name="errorFileSizeLimitBytes">The maximum size, in bytes, to which the error file for a specific date will be allowed to grow. By default no limit will be applied.</param>
+        /// <param name="errorStoreEvents">If set to 'true' then events related to any error will be saved to the error file (after the error message). Pass null for default value (false).</param>
+        /// <param name="debugStoreBatchLimitsOverflows">If set to 'true' then overflows when creating batch posts will be stored (overflows for BatchPostingLimit and also for BatchSizeLimitBytes). Pass null for default value (false).</param>
+        /// <param name="debugStoreAll">If set to 'true' then debug data will be stored. Pass null for default value (false).</param>
+        /// <param name="messageDataToBase64">If set to 'true' then data on PubSub messages is converted to Base64. Pass null for default value (true).</param>
+        /// <param name="eventFieldSeparator">Fields separator in event data.</param>
+        /// <param name="messageAttrMinValue">If given indicates that the PubSub message has to contain an attribute that is obtained as the MIN value for a concret field in the event dada.</param>
+        /// <param name="messageAttrFixed">If given then in each message to PubSub will be added as many attributes as elements has de dictionary, where
+        /// the key corresponds to an attribute name and the value corresponds to its value to set.</param>
+        /// <param name="debugStoreEventSkip">If set to 'true' then skiped events (greater than the BatchSizeLimitBytes) will be stored.</param>
+        /// <param name="bufferRollingSpecifier">Rolling specifier: {Date}, {Hour} or {HalfHour}. The default one is {Date}.</param>
         public void SetValues(
             string bufferBaseFilename,
             long? bufferFileSizeLimitBytes = null,
@@ -257,9 +290,9 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             bool? messageDataToBase64 = null,
             string eventFieldSeparator = null,
             string messageAttrMinValue = null,
-            bool? bufferWriteIsBuffered = null,
             Dictionary<string, string> messageAttrFixed = null,
-            bool? debugStoreEventSkip = null)
+            bool? debugStoreEventSkip = null,
+            string bufferRollingSpecifier = null)
         {
             this.BufferBaseFilename = bufferBaseFilename;
             this.ErrorBaseFilename = errorBaseFilename;
@@ -280,9 +313,9 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             if (!string.IsNullOrEmpty(bufferFileExtension))
                 this.BufferFileExtension = bufferFileExtension;
 
-            if (bufferWriteIsBuffered != null)
-                this.BufferWriteIsBuffered = bufferWriteIsBuffered.Value;
-            
+            if (!string.IsNullOrEmpty(bufferRollingSpecifier))
+                this.BufferRollingSpecifier = bufferRollingSpecifier;
+
             //---
 
             if (batchPostingLimit != null)

@@ -14,17 +14,17 @@
   "frameworks": {
     "net4.5": {
       "dependencies": {
-        "Serilog": "2.2.1",
+        "Serilog": "2.3.0",
         "Serilog.Sinks.PeriodicBatching": "2.0.0",
-        "Serilog.Sinks.RollingFile": "3.0.1",
+        "Serilog.Sinks.RollingFile": "3.2.0-dev-00753",
         "Google.Pubsub.V1": "1.0.0-beta02"
       }
     },
     "net4.6": {
       "dependencies": {
-        "Serilog": "2.2.1",
+        "Serilog": "2.3.0",
         "Serilog.Sinks.PeriodicBatching": "2.0.0",
-        "Serilog.Sinks.RollingFile": "3.0.1",
+        "Serilog.Sinks.RollingFile": "3.2.0-dev-00753",
         "Google.Pubsub.V1": "1.0.0-beta02"
       }
     }

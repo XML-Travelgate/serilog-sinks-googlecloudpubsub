@@ -58,15 +58,12 @@ namespace Serilog
         /// <param name="debugStoreBatchLimitsOverflows">If set to 'true' then overflows when creating batch posts will be stored (overflows for BatchPostingLimit and also for BatchSizeLimitBytes). Pass null for default value (false).</param>
         /// <param name="debugStoreAll">If set to 'true' then debug data will be stored. Pass null for default value (false).</param>
         /// <param name="messageDataToBase64">If set to 'true' then data on PubSub messages is converted to Base64. Pass null for default value (true).</param>
-        /// <param name="eventFieldSeparator">Fields seperator in event data.</param>
+        /// <param name="eventFieldSeparator">Fields separator in event data.</param>
         /// <param name="messageAttrMinValue">If given indicates that the PubSub message has to contain an attribute that is obtained as the MIN value for a concret field in the event dada.</param>
-        /// <param name="bufferWriteIsBuffered">If set to 'true' then the underlying stream will buffer writes to improve write performance.
-        /// If set to 'false' (default value) each event write will be flushed to disk individually at that moment. Pass null for default value (false).
-        /// IMPORTANT: activating the buffer doesn't guarantee events writing integrity. An event can be writen to disk not with its
-        /// full information (because the buffer is full and it has not space enought for all the event data) and then can be sent to PubSub in different messages.</param>
         /// <param name="messageAttrFixed">If given then in each message to PubSub will be added as many attributes as elements has de dictionary, where
         /// the key corresponds to an attribute name and the value corresponds to its value to set.</param>
         /// <param name="debugStoreEventSkip">If set to 'true' then skiped events (greater than the BatchSizeLimitBytes) will be stored.</param>
+        /// <param name="bufferRollingSpecifier">Rolling specifier: {Date}, {Hour} or {HalfHour}. The default one is {Date}.</param>
         /// <returns>LoggerConfiguration object</returns>
         /// <exception cref="ArgumentNullException"><paramref name="projectId"/> is <see langword="null" />.</exception>
         /// <exception cref="ArgumentNullException"><paramref name="topicId"/> is <see langword="null" />.</exception>
@@ -91,9 +88,9 @@ namespace Serilog
             bool? messageDataToBase64 = null,
             string eventFieldSeparator = null,
             string messageAttrMinValue = null,
-            bool? bufferWriteIsBuffered = null,
             Dictionary<string, string> messageAttrFixed = null,
-            bool? debugStoreEventSkip = null)
+            bool? debugStoreEventSkip = null,
+            string bufferRollingSpecifier = null)
         {
 
             //--- Creating an options object with the received parameters -------------
@@ -117,9 +114,9 @@ namespace Serilog
                 messageDataToBase64,
                 eventFieldSeparator,
                 messageAttrMinValue,
-                bufferWriteIsBuffered,
                 messageAttrFixed,
-                debugStoreEventSkip);
+                debugStoreEventSkip,
+                bufferRollingSpecifier);
 
 
             //--- Mandatory parameters ------------
@@ -167,7 +164,7 @@ namespace Serilog
             // The choosen sink will contain the execution options.
             //
             var sink = string.IsNullOrWhiteSpace(options.BufferBaseFilename)
-                ? (ILogEventSink)new GoogleCloudPubSubSink(options)
+                ? (ILogEventSink)new PeriodicGoogleCloudPubSubSink(options)
                 : new DurableGoogleCloudPubSubSink(options);
 
             return loggerSinkConfiguration.Sink(sink, options.MinimumLogEventLevel ?? LevelAlias.Minimum);
