@@ -90,7 +90,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// <param name="messageAttrFixed">If given then in each message to PubSub will be added as many attributes as elements has de dictionary, where
         /// the key corresponds to an attribute name and the value corresponds to its value to set.</param>
         /// <param name="debugStoreEventSkip">If set to 'true' then skiped events (greater than the BatchSizeLimitBytes) will be stored.</param>
-        /// <param name="bufferRollingSpecifier">Rolling specifier: {Date}, {Hour} or {HalfHour}. The default one is {Date}.</param>
+        /// <param name="bufferRollingSpecifier">Rolling specifier: {Date}, {Hour} or {HalfHour}. The default one is {Hour}.</param>
+        /// <param name="errorRetainedFileCountLimit">The maximum number of error log files that will be retained, including the current error file. For unlimited retention, pass null. The default is 31.</param>
         /// <returns>LoggerConfiguration object</returns>
         /// <exception cref="ArgumentNullException"><paramref name="projectId"/> is <see langword="null" />.</exception>
         /// <exception cref="ArgumentNullException"><paramref name="topicId"/> is <see langword="null" />.</exception>
@@ -116,7 +117,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             string messageAttrMinValue = null,
             Dictionary<string, string> messageAttrFixed = null,
             bool? debugStoreEventSkip = null,
-            string bufferRollingSpecifier = null)
+            string bufferRollingSpecifier = null,
+            int? errorRetainedFileCountLimit = null)
         {
 
             //--- Creating an options object with the received parameters -------------
@@ -142,7 +144,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                 messageAttrMinValue,
                 messageAttrFixed,
                 debugStoreEventSkip,
-                bufferRollingSpecifier);
+                bufferRollingSpecifier,
+                errorRetainedFileCountLimit);
 
             //-----
 
@@ -172,7 +175,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                         options.ErrorBaseFilename + "-" + options.BufferRollingSpecifier + errorsFileExtension,
                         new GoogleCloudPubSubRawFormatter(),   // Formatter for error info (raw).
                         options.ErrorFileSizeLimitBytes,
-                        null
+                        options.ErrorRetainedFileCountLimit
                     );
             }
 

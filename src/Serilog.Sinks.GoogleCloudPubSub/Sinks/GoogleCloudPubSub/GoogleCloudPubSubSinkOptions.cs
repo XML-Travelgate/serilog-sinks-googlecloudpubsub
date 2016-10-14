@@ -116,14 +116,6 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// </summary>
         public int? BufferRetainedFileCountLimit { get; set; }
 
-        /// <summary>
-        /// If set to 'true' then the underlying stream will buffer writes to improve write performance.
-        /// If set to 'false' (default value) each event write will be flushed to disk individually at that moment.
-        /// IMPORTANT: activating the buffer doesn't guarantee events writing integrity. An event can be writen to disk not with its
-        /// full information (because the buffer is full and it has not space enought for all the event data) and then can be sent to PubSub in different messages.
-        /// </summary>
-        public bool BufferWriteIsBuffered { get; set; }
-
         #endregion
 
 
@@ -145,22 +137,28 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// <summary>
         /// If set to 'true' then events related to any error will be saved to the error file (after the error message).
         /// </summary>
-        public bool ErrorStoreEvents { get; set; }
+        public bool ErrorStoreEvents { get; set; } = false;
 
         /// <summary>
         /// If set to 'true' then overflows when creating batch posts will be stored (overflows for BatchPostingLimit and also for BatchSizeLimitBytes).
         /// </summary>
-        public bool DebugStoreBatchLimitsOverflows { get; set; }
+        public bool DebugStoreBatchLimitsOverflows { get; set; } = false;
 
         /// <summary>
         /// If set to 'true' then skiped events (greater than the BatchSizeLimitBytes) will be stored.
         /// </summary>
-        public bool DebugStoreEventSkip { get; set; }
+        public bool DebugStoreEventSkip { get; set; } = false;
 
         /// <summary>
-        /// If set to 'true' then debug data will be stored.
+        /// If set to 'true' then ALL debug data will be stored. If set to 'false' then each type of
+        /// debug data will be stored depending on its own switch.
         /// </summary>
-        public bool DebugStoreAll { get; set; }
+        public bool DebugStoreAll { get; set; } = false;
+
+        /// <summary>
+        /// The maximum number of error log files that will be retained, including the current error file. For unlimited retention, pass null. The default is 31.
+        /// </summary>
+        public int? ErrorRetainedFileCountLimit { get; set; }
 
         #endregion
 
@@ -225,8 +223,9 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             this.BufferLogShippingInterval = TimeSpan.FromSeconds(2);
             this.Period = TimeSpan.FromSeconds(2);
             this.MessageDataToBase64 = true;
-            this.BufferWriteIsBuffered = false;
             this.BufferRollingSpecifier = "{Hour}";
+            this.BufferRetainedFileCountLimit = 31;
+            this.ErrorRetainedFileCountLimit = 31;
         }
 
         /// <summary>
@@ -272,7 +271,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// <param name="messageAttrFixed">If given then in each message to PubSub will be added as many attributes as elements has de dictionary, where
         /// the key corresponds to an attribute name and the value corresponds to its value to set.</param>
         /// <param name="debugStoreEventSkip">If set to 'true' then skiped events (greater than the BatchSizeLimitBytes) will be stored.</param>
-        /// <param name="bufferRollingSpecifier">Rolling specifier: {Date}, {Hour} or {HalfHour}. The default one is {Date}.</param>
+        /// <param name="bufferRollingSpecifier">Rolling specifier: {Date}, {Hour} or {HalfHour}. The default one is {Hour}.</param>
+        /// <param name="errorRetainedFileCountLimit">The maximum number of error log files that will be retained, including the current error file. For unlimited retention, pass null. The default is 31.</param>
         public void SetValues(
             string bufferBaseFilename,
             long? bufferFileSizeLimitBytes = null,
@@ -292,7 +292,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             string messageAttrMinValue = null,
             Dictionary<string, string> messageAttrFixed = null,
             bool? debugStoreEventSkip = null,
-            string bufferRollingSpecifier = null)
+            string bufferRollingSpecifier = null,
+            int? errorRetainedFileCountLimit = null)
         {
             this.BufferBaseFilename = bufferBaseFilename;
             this.ErrorBaseFilename = errorBaseFilename;
@@ -340,7 +341,9 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
             if (debugStoreEventSkip != null)
                 this.DebugStoreEventSkip = debugStoreEventSkip.Value;
-            
+
+            if (errorRetainedFileCountLimit != null)
+                this.ErrorRetainedFileCountLimit = errorRetainedFileCountLimit.Value;
 
             //---
 
