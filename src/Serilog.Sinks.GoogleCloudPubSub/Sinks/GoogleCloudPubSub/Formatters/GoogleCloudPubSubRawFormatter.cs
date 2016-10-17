@@ -16,10 +16,10 @@ using System.IO;
 using Serilog.Formatting;
 using Serilog.Events;
 
-namespace Serilog.Sinks.GoogleCloudPubSub
+namespace Serilog.Sinks.GoogleCloudPubSub.Formatters
 {
     /// <summary>
-    /// A RawFormatter which plays nice with PubsubMessage 
+    /// This formatter send only the messageTemplate part of the event.
     /// </summary>
     public class GoogleCloudPubSubRawFormatter : ITextFormatter
     {
@@ -39,6 +39,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             // This method is executed each time a log event has to be stored (into memory, into the buffer file, ...)
             // In this development data is stored as raw data: no format is given.
             // Each log is stored in a separate line.
+
             output.WriteLine(logEvent.MessageTemplate.Text);
         }
         #endregion

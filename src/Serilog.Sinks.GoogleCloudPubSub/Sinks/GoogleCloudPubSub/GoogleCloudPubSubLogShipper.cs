@@ -65,7 +65,6 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             this._batchPostingLimit = this._state.Options.BatchPostingLimit;
             this._batchSizeLimitBytes = this._state.Options.BatchSizeLimitBytes;
             this._retainedFileCountLimit = this._state.Options.BufferRetainedFileCountLimit;
-            this._isBuffered = this._state.Options.BufferWriteIsBuffered;
             this._bookmarkFilename = Path.GetFullPath(this._state.Options.BufferBaseFilename + ".bookmark");
             this._logFolder = Path.GetDirectoryName(this._bookmarkFilename);
             this._candidateSearchPath = Path.GetFileName(this._state.Options.BufferBaseFilename) + "*" + this._state.Options.BufferFileExtension;
