@@ -16,6 +16,7 @@ using System;
 using Serilog.Formatting;
 using Serilog.Events;
 using System.Collections.Generic;
+using Serilog.Sinks.GoogleCloudPubSub.Formatters;
 
 namespace Serilog.Sinks.GoogleCloudPubSub
 {
@@ -34,7 +35,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         #region ------ Google PubSub settings ------------------------
 
         ///<summary>
-        /// GoogleCloudOubSub project to publish.
+        /// GoogleCloudPubSub project to publish.
         /// </summary>
         public string ProjectId{get;set;}
 
@@ -84,7 +85,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         #region ------ Durable Batching settings (using buffer file on disk) ------------------------
 
         /// <summary>
-        /// The interval between checking the buffer files.
+        /// The interval (miliseconds) between checking the buffer files.
         /// </summary>
         public TimeSpan? BufferLogShippingInterval { get; set; }
 
@@ -102,12 +103,12 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         public string BufferFileExtension { get; set; }
 
         /// <summary>
-        /// Rolling specifier: {Date}, {Hour} or {HalfHour}. The default one is {Date}.
+        /// Rolling specifier: {Date}, {Hour} or {HalfHour}. The default one is {Hour}.
         /// </summary>
         public string BufferRollingSpecifier { get; set; }
 
         /// <summary>
-        /// The maximum size, in bytes, to which the buffer file for a specific date will be allowed to grow. By default no limit will be applied.
+        /// The maximum size, in bytes, to which the buffer file for the specifier will be allowed to grow. By default no limit will be applied.
         /// </summary>
         public long? BufferFileSizeLimitBytes { get; set; }
 
@@ -130,7 +131,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         public string ErrorBaseFilename { get; set; }
 
         /// <summary>
-        /// The maximum size, in bytes, to which the error/debug file for a specific date will be allowed to grow. By default no limit will be applied.
+        /// The maximum size, in bytes, to which the error/debug file for the specifier will be allowed to grow. By default no limit will be applied.
         /// </summary>
         public long? ErrorFileSizeLimitBytes { get; set; }
 

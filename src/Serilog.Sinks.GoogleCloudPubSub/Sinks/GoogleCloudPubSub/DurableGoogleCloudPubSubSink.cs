@@ -17,6 +17,7 @@ using Serilog.Core;
 using Serilog.Events;
 using Serilog.Sinks.RollingFile;
 using System.Collections.Generic;
+using Serilog.Sinks.GoogleCloudPubSub.Formatters;
 
 namespace Serilog.Sinks.GoogleCloudPubSub
 {

@@ -20,6 +20,7 @@ using Google.Pubsub.V1;
 using Google.Protobuf;
 using Serilog.Sinks.RollingFile;
 using System.Text;
+using Serilog.Sinks.GoogleCloudPubSub.Formatters;
 
 namespace Serilog.Sinks.GoogleCloudPubSub
 {
