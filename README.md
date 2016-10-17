@@ -22,7 +22,7 @@ master | [![Build status](https://ci.appveyor.com/api/projects/status/afbwe9ssan
 # Google PubSub Authentication
 
 It is used the authentication specified by the [Google.Pubsub.V1] (https://github.com/GoogleCloudPlatform/google-cloud-dotnet/tree/master/apis/Google.Pubsub.V1) package.
-Please refer to its documentation to se how it works. 
+Please refer to its documentation to see how it works. 
 
 The most common method to authenticate is to define the environment variable GOOGLE_APPLICATION_CREDENTIALS to be the location of the key (a .json file).
 This environment variable can be set for a machine, for a user or also can be set into code (for the process).
@@ -154,7 +154,7 @@ The default value is 31.
 
 
 
-# Basic configuration options
+# Data configuration options
 
 ### MessageDataToBase64
 If set to 'true' then data on PubSub messages is converted to Base64.
