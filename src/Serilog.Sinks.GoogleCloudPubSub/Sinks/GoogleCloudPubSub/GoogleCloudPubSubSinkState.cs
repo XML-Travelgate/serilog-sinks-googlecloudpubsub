@@ -360,6 +360,16 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
         //---
 
+        public void DebugFileAction(string message)
+        {
+            if (this.Options.DebugStoreAll || this.Options.DebugStoreFileAction)
+            {
+                this._ErrorDebugStore(message, null, false);
+            }
+        }
+
+        //---
+
         public void _ErrorDebugStore(string message, List<string> payloadStr, bool savePayload)
         {
             // This method stores an error or debug information (if necessary).

@@ -42,6 +42,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
         // RollingFileSink instance to manage the error file.
         private RollingFileSink _errorsRollingFileSink;
+
+        private readonly string CNST_Specifier_Separator = "-";
         #endregion
 
 
@@ -93,6 +95,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// <param name="debugStoreEventSkip">If set to 'true' then skiped events (greater than the BatchSizeLimitBytes) will be stored.</param>
         /// <param name="bufferRollingSpecifier">Rolling specifier: {Date}, {Hour} or {HalfHour}. The default one is {Hour}.</param>
         /// <param name="errorRetainedFileCountLimit">The maximum number of error log files that will be retained, including the current error file. For unlimited retention, pass null. The default is 31.</param>
+        /// <param name="debugStoreFileAction">If set to 'true' then all file actions(move forward, delete, ...) will me stored.</param>
         /// <returns>LoggerConfiguration object</returns>
         /// <exception cref="ArgumentNullException"><paramref name="projectId"/> is <see langword="null" />.</exception>
         /// <exception cref="ArgumentNullException"><paramref name="topicId"/> is <see langword="null" />.</exception>
@@ -119,7 +122,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             Dictionary<string, string> messageAttrFixed = null,
             bool? debugStoreEventSkip = null,
             string bufferRollingSpecifier = null,
-            int? errorRetainedFileCountLimit = null)
+            int? errorRetainedFileCountLimit = null,
+            bool? debugStoreFileAction = null)
         {
 
             //--- Creating an options object with the received parameters -------------
@@ -146,7 +150,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                 messageAttrFixed,
                 debugStoreEventSkip,
                 bufferRollingSpecifier,
-                errorRetainedFileCountLimit);
+                errorRetainedFileCountLimit,
+                debugStoreFileAction);
 
             //-----
 
@@ -173,7 +178,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             if (!string.IsNullOrWhiteSpace(options.ErrorBaseFilename))
             {
                 this._errorsRollingFileSink = new RollingFileSink(
-                        options.ErrorBaseFilename + "-" + options.BufferRollingSpecifier + errorsFileExtension,
+                        options.ErrorBaseFilename + CNST_Specifier_Separator + options.BufferRollingSpecifier + errorsFileExtension,
                         new GoogleCloudPubSubRawFormatter(),   // Formatter for error info (raw).
                         options.ErrorFileSizeLimitBytes,
                         options.ErrorRetainedFileCountLimit
@@ -190,7 +195,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             //--- RollingFileSink to store data to be sent to PubSub ------------------
             // It will be generated a file for each day.
             this._dataRollingFileSink = new RollingFileSink(
-                    options.BufferBaseFilename + "-" + options.BufferRollingSpecifier + options.BufferFileExtension,
+                    options.BufferBaseFilename + CNST_Specifier_Separator + options.BufferRollingSpecifier + options.BufferFileExtension,
                     this._state.DurableFormatter,   // Formatter for data to insert into the buffer file.
                     options.BufferFileSizeLimitBytes,
                     null
