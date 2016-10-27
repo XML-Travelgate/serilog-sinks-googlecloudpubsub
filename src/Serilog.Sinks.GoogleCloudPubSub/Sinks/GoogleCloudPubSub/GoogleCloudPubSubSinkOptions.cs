@@ -161,6 +161,11 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// </summary>
         public int? ErrorRetainedFileCountLimit { get; set; }
 
+        /// <summary>
+        /// If set to 'true' then all file actions (move forward, delete, ...) will me stored.
+        /// </summary>
+        public bool DebugStoreFileAction { get; set; } = false;
+
         #endregion
 
 
@@ -274,6 +279,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// <param name="debugStoreEventSkip">If set to 'true' then skiped events (greater than the BatchSizeLimitBytes) will be stored.</param>
         /// <param name="bufferRollingSpecifier">Rolling specifier: {Date}, {Hour} or {HalfHour}. The default one is {Hour}.</param>
         /// <param name="errorRetainedFileCountLimit">The maximum number of error log files that will be retained, including the current error file. For unlimited retention, pass null. The default is 31.</param>
+        /// <param name="debugStoreFileAction">If set to 'true' then all file actions (move forward, delete, ...) will me stored.</param>
         public void SetValues(
             string bufferBaseFilename,
             long? bufferFileSizeLimitBytes = null,
@@ -294,7 +300,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             Dictionary<string, string> messageAttrFixed = null,
             bool? debugStoreEventSkip = null,
             string bufferRollingSpecifier = null,
-            int? errorRetainedFileCountLimit = null)
+            int? errorRetainedFileCountLimit = null,
+            bool? debugStoreFileAction = null)
         {
             this.BufferBaseFilename = bufferBaseFilename;
             this.ErrorBaseFilename = errorBaseFilename;
@@ -345,6 +352,9 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
             if (errorRetainedFileCountLimit != null)
                 this.ErrorRetainedFileCountLimit = errorRetainedFileCountLimit.Value;
+
+            if (debugStoreFileAction != null)
+                this.DebugStoreFileAction = debugStoreFileAction.Value;
 
             //---
 

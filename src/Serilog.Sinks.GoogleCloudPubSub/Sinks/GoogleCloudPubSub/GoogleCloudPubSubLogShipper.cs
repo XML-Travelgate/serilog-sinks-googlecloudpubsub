@@ -49,6 +49,10 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         private static string CNST_Shipper_Debug = "Shipper [Debug]: ";
 
         private static readonly int CNST_NewLineBytes = Encoding.UTF8.GetByteCount(Environment.NewLine);
+
+        // Stats for current file.
+        private int linesSentForCurrentFile = 0;
+        private int batchsSentForCurrentFile = 0;
         #endregion
 
 
@@ -164,20 +168,18 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                         }
 
                         // Anyway, we don't have a buffer file to read from, so we exit without sending data neither updating the bookmark.
-                        if (currentFilePath == null) continue;
+                        if (currentFilePath == null) continue;  // >>>>>>>>>>>>>
 
-                        //--- File date recovery and file extension validation ---
-                        // file name pattern: whatever-xxx-xxx-{date}.{ext}, whatever-xxx-xxx-{date}_1.{ext}, etc.
-                        // lastToken should be something like {date}.{ext} or {date}_1.{ext} now
-                        string lastToken = currentFilePath.Split('-').Last();                       
-                        if (!lastToken.ToLowerInvariant().EndsWith(this._state.Options.BufferFileExtension))
+                        // Position of the current file in the set.
+                        int currentFileSetPosition = 0;
+                        if (!this.GetFileSetPosition(fileSet, currentFilePath, out currentFileSetPosition))
                         {
-                            throw new FormatException(string.Format("The file name '{0}' does not seem to follow the right file pattern - it must be named [whatever]-{{Date}}[_n].{extension}", Path.GetFileName(currentFilePath)));
+                            this._state.Error($"The current file (bookmark) does not exist in the file set and I don't know what to do. [{currentFilePath}]");
+                            continue;  // >>>>>>>>>>>>>
                         }
-                        string dateString = lastToken.Substring(0, 8);
-                        DateTime date = DateTime.ParseExact(dateString, "yyyyMMdd", CultureInfo.InvariantCulture);
 
-
+                        // It is not done any file date recovery or file extension validation to do not disturb the main app.
+                        // All files that match the template (that are contained in the FileSet) will be considered and managed.
 
 
                         //--- 2nd step : read current buffer file and position ------------------------------------------------------
@@ -281,15 +283,17 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                                 //--- OK ---
                                 GoogleCloudPubSubLogShipper.WriteBookmark(bookmark, nextLineBeginsAtOffset, currentFilePath);
                                 this._connectionSchedule.MarkSuccess();
+                                this.linesSentForCurrentFile += payloadStr.Count;
+                                this.batchsSentForCurrentFile++;
                                 //---
-                                this._state.Debug($"{CNST_Shipper_Debug} Data sent OK to PubSub.");
+                                this._state.Debug($"{CNST_Shipper_Debug} OK sending data to PubSub.");
                             }
                             else
                             {
                                 //--- ERROR ---
                                 this._connectionSchedule.MarkFailure();
                                 //---
-                                auxMessage = $"{CNST_Shipper_Error} Data sent ERROR to PubSub. [{response.ErrorMessage}]";
+                                auxMessage = $"{CNST_Shipper_Error} ERROR sending data to PubSub. [{response.ErrorMessage}]";
                                 SelfLog.WriteLine(auxMessage);
                                 this._state.Error(auxMessage, payloadStr);
                                 break;
@@ -314,12 +318,18 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                             // regular interval, so mark the attempt as successful.
                             this._connectionSchedule.MarkSuccess();
 
-                            // Only advance the bookmark if no other process has the
-                            // current file locked, and its length is as we found it.   
-                            if (fileSet.Length == 2 && fileSet.First() == currentFilePath && IsUnlockedAtLength(currentFilePath, nextLineBeginsAtOffset, this._state))
+                            // Only advance the bookmark if no other process has the current file locked, and its length is as we found it
+                            // and there is another next file.
+                            int nextFileSetPosition = currentFileSetPosition + 1;
+                            if (nextFileSetPosition < fileSet.Length && IsUnlockedAtLength(currentFilePath, nextLineBeginsAtOffset, this._state))
                             {
-                                this._state.Debug($"{CNST_Shipper_Debug} Move forward to next file. [{fileSet[1]}].");
-                                GoogleCloudPubSubLogShipper.WriteBookmark(bookmark, 0, fileSet[1]);
+                                // --- Move to next file --------------------------------------------------
+                                this._state.DebugFileAction($"{CNST_Shipper_Debug} File finished: Lines=[{this.linesSentForCurrentFile}] Batchs=[{this.batchsSentForCurrentFile}] File=[{currentFilePath}]");
+                                this._state.DebugFileAction($"{CNST_Shipper_Debug} Move forward to next file. [{fileSet[nextFileSetPosition]}].");
+                                GoogleCloudPubSubLogShipper.WriteBookmark(bookmark, 0, fileSet[nextFileSetPosition]);
+                                this.linesSentForCurrentFile = 0;
+                                this.batchsSentForCurrentFile = 0;
+                                //-------------------------------------------------------------------------
                             }
 
                             //if (fileSet.Length > 2)
@@ -336,9 +346,9 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                         //--- Retained File Count Limit --------------
                         // If necessary, one obsolete file is deleted each time.
                         // It is done even there is or not data to send: it is possible that our application is sending data at any time.
-                        if (fileSet.Length > 2 && fileSet.Length > this._retainedFileCountLimit && fileSet.First() != currentFilePath)
+                        if (fileSet.Length > 2 && fileSet.Length > this._retainedFileCountLimit && currentFileSetPosition > 0)
                         {
-                            this._state.Debug($"{CNST_Shipper_Debug} File delete. [{fileSet[0]}].");
+                            this._state.DebugFileAction($"{CNST_Shipper_Debug} File delete. [{fileSet[0]}].");
                             System.IO.File.Delete(fileSet[0]);
                         }
                         //--------------------------------------------
@@ -449,7 +459,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         }
 
 
-      static void TryReadBookmark(Stream bookmark, out long nextLineBeginsAtOffset, out string currentFile)
+        static void TryReadBookmark(Stream bookmark, out long nextLineBeginsAtOffset, out string currentFile)
         {
             nextLineBeginsAtOffset = 0;
             currentFile = null;
@@ -482,6 +492,27 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                 .OrderBy(n => n)
                 .ToArray();
         }
+
+        bool GetFileSetPosition(string[] fileSet, string filePath, out int fileSetPosition)
+        {
+            fileSetPosition = 0;
+
+            if (fileSet != null)
+            {
+                foreach (string f in fileSet)
+                {
+                    if (fileSet[fileSetPosition] == filePath)
+                    {
+                        return true;
+                    }
+
+                    fileSetPosition++;
+                }
+            }
+
+            return false;
+        }
+
         #endregion
 
 
