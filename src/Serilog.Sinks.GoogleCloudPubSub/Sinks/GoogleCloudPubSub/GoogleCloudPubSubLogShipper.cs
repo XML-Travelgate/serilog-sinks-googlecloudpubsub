@@ -50,9 +50,13 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
         private static readonly int CNST_NewLineBytes = Encoding.UTF8.GetByteCount(Environment.NewLine);
 
-        // Stats for current file.
-        private int linesSentForCurrentFile = 0;
-        private int batchsSentForCurrentFile = 0;
+        // Stats for current file (to store when it is finished).
+        private int linesSentOKForCurrentFile = 0;
+        private int linesSentERRORForCurrentFile = 0;
+        private int linesDroppedForCurrentFile = 0;
+        private int overflowsForCurrentFile = 0;
+        private int batchesSentOKForCurrentFile = 0;
+        private int batchesSentERRORForCurrentFile = 0;
         #endregion
 
 
@@ -131,24 +135,23 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         #region
         void OnTick()
         {
-             try
+            string currentFilePath = null;
+
+            try
             {
-                var count = 0;
-                bool isSizeLimitOverflow = false;
-                bool hasMoreLines = true;
+                bool continueWhile = false;
 
                 do
                 {
                     // Locking the bookmark ensures that though there may be multiple instances of this
                     // class running, only one will ship logs at a time.
-                    using (var bookmark = System.IO.File.Open(this._bookmarkFilename, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read))
+                    using (FileStream bookmark = System.IO.File.Open(this._bookmarkFilename, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read))
                     {
-                        string auxMessage = null;
 
                         //--- 1st step : identify the current buffer file and position to read from --------------------------------------------
 
                         long nextLineBeginsAtOffset;    // Current position to read in the current buffer file.
-                        string currentFilePath;         // Current buffer file path with data to read and send.
+                        currentFilePath = null;         // Current buffer file path with data to read and send.
 
                         // NOTE: 
                         //      Data is recovered from one buffer file each time onTick is executed.
@@ -157,7 +160,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                         GoogleCloudPubSubLogShipper.TryReadBookmark(bookmark, out nextLineBeginsAtOffset, out currentFilePath);
 
                         // Candidate buffer files (in the working folder): all and ordered by name to have a sequence of treatment.
-                        string[] fileSet = this.GetFileSet();
+                        string[] fileSet = GoogleCloudPubSubLogShipper.GetFileSet(this._logFolder, this._candidateSearchPath);
 
                         // We don't have a bookmark or it is not pointing to an existing file...
                         if (currentFilePath == null || !System.IO.File.Exists(currentFilePath))
@@ -172,7 +175,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
                         // Position of the current file in the set.
                         int currentFileSetPosition = 0;
-                        if (!this.GetFileSetPosition(fileSet, currentFilePath, out currentFileSetPosition))
+                        if (!GoogleCloudPubSubLogShipper.GetFileSetPosition(fileSet, currentFilePath, out currentFileSetPosition))
                         {
                             this._state.Error($"The current file (bookmark) does not exist in the file set and I don't know what to do. [{currentFilePath}]");
                             continue;  // >>>>>>>>>>>>>
@@ -182,29 +185,29 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                         // All files that match the template (that are contained in the FileSet) will be considered and managed.
 
 
-                        //--- 2nd step : read current buffer file and position ------------------------------------------------------
+                        //--- 2nd step : read current buffer file from starting position ------------------------------------------------------
 
                         List<string> payloadStr = new List<string>();
                         long payloadSizeByte = 0;
-                        count = 0;
-                        isSizeLimitOverflow = false;
-                        hasMoreLines = true;
+                        bool isSizeLimitOverflow = false;
+                        bool currentBufferFileHasMoreLines = true;
+                        bool bufferFileChanged = false;
 
-                        using (var current = System.IO.File.Open(currentFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                        using (FileStream currentBufferFile = System.IO.File.Open(currentFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                         {
-                            current.Position = nextLineBeginsAtOffset;
+                            currentBufferFile.Position = nextLineBeginsAtOffset;
 
                             string nextLine;
                             long nextlineSizeByte;
                             bool continueAdding = true;
-                            long previousBeginsAtOffset;   
+                            long previousLineBeginsAtOffset;   
 
-                            while (count < this._batchPostingLimit && continueAdding && hasMoreLines)
+                            while (payloadStr.Count < this._batchPostingLimit && continueAdding && currentBufferFileHasMoreLines)
                             {
-                                previousBeginsAtOffset = nextLineBeginsAtOffset;
+                                previousLineBeginsAtOffset = nextLineBeginsAtOffset;
 
                                 // Is there a next line to send? ...
-                                if (GoogleCloudPubSubLogShipper.TryReadLine(current, ref nextLineBeginsAtOffset, out nextLine, out nextlineSizeByte))
+                                if (GoogleCloudPubSubLogShipper.TryReadLine(currentBufferFile, ref nextLineBeginsAtOffset, out nextLine, out nextlineSizeByte))
                                 {
 
                                     // Is there space enough to send the next line in this batch? ...
@@ -212,9 +215,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                                         (payloadSizeByte + nextlineSizeByte <= this._batchSizeLimitBytes.Value))
                                     {
                                         //---The next line is added ------------------
-                                        payloadSizeByte += nextlineSizeByte;
-                                        payloadStr.Add(nextLine);
-                                        ++count;
+                                        this.ActionAddLineToPayload(payloadStr, ref payloadSizeByte, nextLine, nextlineSizeByte);
                                         //--------------------------------------------
                                     }
                                     else
@@ -227,10 +228,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                                             {
                                                 // If the line is bigger than the max size for the batch then it is skipped and an error is saved (this
                                                 // line will never be sent and would stop sending following lines in an infinite bucle).
-                                                auxMessage = $"{CNST_Shipper_Error} Line skipped because it is bigger ({nextlineSizeByte}) than BatchSizeLimitBytes ({this._batchSizeLimitBytes.Value}).";
-                                                SelfLog.WriteLine(auxMessage);
-                                                this._state.Error(auxMessage);
-                                                this._state.DebugEventSkip(CNST_Shipper_Debug, nextLine);
+                                                this.ActionSkipLine(nextLine, nextlineSizeByte);
                                             }
                                             catch
                                             {
@@ -240,16 +238,15 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                                         {
                                             // The line has to be processed with the next batch, so we modify the offset to be stored with the mark
                                             // if the current batch data is sent correctly.
-                                            continueAdding = false;
-                                            nextLineBeginsAtOffset = previousBeginsAtOffset;
+                                            this.ActionMoveLineBackwards(ref continueAdding, ref nextLineBeginsAtOffset, previousLineBeginsAtOffset);
                                         }
                                     }
 
                                 }
                                 else
                                 {
-                                    // There is no more data to add to this batch.
-                                    hasMoreLines = false;
+                                    // There is no more data to add to this batch for the current file.
+                                    currentBufferFileHasMoreLines = false;
                                 }
 
                             } //---end:while---
@@ -257,22 +254,23 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                         }
 
 
-                        if (count == this._batchPostingLimit || isSizeLimitOverflow)
+                        if (payloadStr.Count == this._batchPostingLimit || isSizeLimitOverflow)
                         {
                             //  ...we have reached the posting limit.
                             //  ...we have reached the size limit.
-                            this._state.DebugOverflow(CNST_Shipper_Debug, count, this._batchPostingLimit, payloadSizeByte, this._batchSizeLimitBytes);
+                            this._state.DebugOverflow(CNST_Shipper_Debug, payloadStr.Count, this._batchPostingLimit, payloadSizeByte, this._batchSizeLimitBytes);
+                            this.overflowsForCurrentFile++;
                         }
 
 
                         //--- 3rd step : send data (if we have any) and update bookmark ------------------------------------------------------
 
                         // Do we have data to send?
-                        if (count > 0)
+                        if (payloadStr.Count > 0)
                         {
                             // ...yes, we have data, so come on...
 
-                            this._state.Debug($"{CNST_Shipper_Debug} Payload to send ({count} lines, {payloadSizeByte} bytes)...", payloadStr);
+                            this._state.Debug($"{GoogleCloudPubSubLogShipper.CNST_Shipper_Debug} Payload to send ({payloadStr.Count} lines, {payloadSizeByte} bytes)...", payloadStr);
 
                             //--- Sending data to Google PubSub... ------------
                             GoogleCloudPubSubClientResponse response = this._state.Publish(payloadStr);
@@ -281,21 +279,16 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                             if (response.Success)
                             {
                                 //--- OK ---
-                                GoogleCloudPubSubLogShipper.WriteBookmark(bookmark, nextLineBeginsAtOffset, currentFilePath);
-                                this._connectionSchedule.MarkSuccess();
-                                this.linesSentForCurrentFile += payloadStr.Count;
-                                this.batchsSentForCurrentFile++;
-                                //---
-                                this._state.Debug($"{CNST_Shipper_Debug} OK sending data to PubSub.");
+                                this.ActionMarkBatchSentOK(bookmark, nextLineBeginsAtOffset, currentFilePath, payloadStr);
                             }
                             else
                             {
                                 //--- ERROR ---
-                                this._connectionSchedule.MarkFailure();
-                                //---
-                                auxMessage = $"{CNST_Shipper_Error} ERROR sending data to PubSub. [{response.ErrorMessage}]";
-                                SelfLog.WriteLine(auxMessage);
-                                this._state.Error(auxMessage, payloadStr);
+                                this.ActionMarkBatchSentERROR(response.ErrorMessage, payloadStr);
+                                
+                                // The while bucle is broken and we will exit the current tick.
+                                // The scheduler will se that there has been an error so will act taking it in mind
+                                // when calculating next tick.
                                 break;
                             }
                            
@@ -307,8 +300,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                             // We don't have sent anything to PubSub but an overflow has been detected. This means that there was almost
                             // one line to send and all were bigger than the size limit.
                             // In this case we have to update the bookmark too: if not then next tick will start with this same big line.
-                            GoogleCloudPubSubLogShipper.WriteBookmark(bookmark, nextLineBeginsAtOffset, currentFilePath);
-                            this._connectionSchedule.MarkSuccess();
+                            this.ActionMarkNoBatchButGoForward(bookmark, nextLineBeginsAtOffset, currentFilePath);
                         }
                         else
                         {
@@ -316,50 +308,32 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
                             // For whatever reason, there's nothing waiting to send. This means we should try connecting again at the
                             // regular interval, so mark the attempt as successful.
-                            this._connectionSchedule.MarkSuccess();
+                            this.ActionMarkNoBatchButSuccess();
 
                             // Only advance the bookmark if no other process has the current file locked, and its length is as we found it
                             // and there is another next file.
-                            int nextFileSetPosition = currentFileSetPosition + 1;
-                            if (nextFileSetPosition < fileSet.Length && IsUnlockedAtLength(currentFilePath, nextLineBeginsAtOffset, this._state))
-                            {
-                                // --- Move to next file --------------------------------------------------
-                                this._state.DebugFileAction($"{CNST_Shipper_Debug} File finished: Lines=[{this.linesSentForCurrentFile}] Batchs=[{this.batchsSentForCurrentFile}] File=[{currentFilePath}]");
-                                this._state.DebugFileAction($"{CNST_Shipper_Debug} Move forward to next file. [{fileSet[nextFileSetPosition]}].");
-                                GoogleCloudPubSubLogShipper.WriteBookmark(bookmark, 0, fileSet[nextFileSetPosition]);
-                                this.linesSentForCurrentFile = 0;
-                                this.batchsSentForCurrentFile = 0;
-                                //-------------------------------------------------------------------------
-                            }
-
-                            //if (fileSet.Length > 2)
-                            //{
-                            //    // Once there's a third file waiting to ship, we do our
-                            //    // best to move on, though a lock on the current file
-                            //    // will delay this.
-
-                            //    System.IO.File.Delete(fileSet[0]);
-                            //}
+                            bufferFileChanged = this.ActionGoToNextBufferFileIfAny(bookmark, currentFilePath, currentFileSetPosition, nextLineBeginsAtOffset, fileSet);
                         }
 
-                        
+
                         //--- Retained File Count Limit --------------
                         // If necessary, one obsolete file is deleted each time.
                         // It is done even there is or not data to send: it is possible that our application is sending data at any time.
-                        if (fileSet.Length > 2 && fileSet.Length > this._retainedFileCountLimit && currentFileSetPosition > 0)
-                        {
-                            this._state.DebugFileAction($"{CNST_Shipper_Debug} File delete. [{fileSet[0]}].");
-                            System.IO.File.Delete(fileSet[0]);
-                        }
+                        this.ActionDoRetainedFile(currentFileSetPosition, fileSet);
                         //--------------------------------------------
 
 
+                        // Batch data sent will be done while it is supposed to be more data to send...
+                        //  ...because we have reached the posting limit.
+                        //  ...because we have reached the size limit.
+                        //  ...because we have changed to a new buffer file.
+                        // If we go forward with current file but it hasn't got more lines then nothing wrong happens: next iteration will
+                        // dtect that it hasn't got more information and it will produce to look for a next buffer file.
+                        continueWhile = ((payloadStr.Count == this._batchPostingLimit || isSizeLimitOverflow) && currentBufferFileHasMoreLines) || bufferFileChanged;
+
                     }
                 }
-                while ((count == this._batchPostingLimit || isSizeLimitOverflow) && hasMoreLines);
-                // Batch data sent will be done while it is supposed to be more data to send...
-                //  ...because we have reached the posting limit.
-                //  ...because we have reached the size limit.
+                while (continueWhile);
 
             }
             catch (Exception ex)
@@ -374,7 +348,17 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             {
                 lock (this._stateLock)
                 {
-                    if (!this._unloading)
+                    if (this._unloading)
+                    {
+                        try
+                        {
+                            this._LogCurrentFile(currentFilePath);
+                        }
+                        catch (Exception)
+                        {
+                        }                       
+                    }
+                    else
                     {
                         SetTimer();
                     }
@@ -387,7 +371,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
 
         //*******************************************************************
-        //      FILES MANAGEMENT FUNCTIONS
+        //      FILES MANAGEMENT FUNCTIONS (static)
         //*******************************************************************
 
         #region
@@ -421,14 +405,6 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             return false;
         }
 
-        static void WriteBookmark(FileStream bookmark, long nextLineBeginsAtOffset, string currentFile)
-        {
-            using (var writer = new StreamWriter(bookmark))
-            {
-                writer.WriteLine("{0}:::{1}", nextLineBeginsAtOffset, currentFile);
-            }
-        }
-
         static bool TryReadLine(Stream current, ref long nextStart, out string nextLine, out long nextlineSizeByte)
         {
             //bool includesBom = (nextStart == 0);
@@ -458,7 +434,42 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             return true;
         }
 
+        static string[] GetFileSet(string logFolder, string candidateSearchPath)
+        {
+            return Directory.GetFiles(logFolder, candidateSearchPath)
+                .OrderBy(n => n)
+                .ToArray();
+        }
 
+        static bool GetFileSetPosition(string[] fileSet, string filePath, out int fileSetPosition)
+        {
+            fileSetPosition = 0;
+
+            if (fileSet != null)
+            {
+                foreach (string f in fileSet)
+                {
+                    if (fileSet[fileSetPosition] == filePath)
+                    {
+                        return true;
+                    }
+
+                    fileSetPosition++;
+                }
+            }
+
+            return false;
+        }
+
+        #endregion
+
+
+
+        //*******************************************************************
+        //      BOOKMARK MANAGEMENT (static)
+        //*******************************************************************
+
+        #region
         static void TryReadBookmark(Stream bookmark, out long nextLineBeginsAtOffset, out string currentFile)
         {
             nextLineBeginsAtOffset = 0;
@@ -486,35 +497,137 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             }
         }
 
-        string[] GetFileSet()
+        static void WriteBookmark(FileStream bookmark, long nextLineBeginsAtOffset, string currentFile)
         {
-            return Directory.GetFiles(this._logFolder, this._candidateSearchPath)
-                .OrderBy(n => n)
-                .ToArray();
-        }
-
-        bool GetFileSetPosition(string[] fileSet, string filePath, out int fileSetPosition)
-        {
-            fileSetPosition = 0;
-
-            if (fileSet != null)
+            using (var writer = new StreamWriter(bookmark))
             {
-                foreach (string f in fileSet)
-                {
-                    if (fileSet[fileSetPosition] == filePath)
-                    {
-                        return true;
-                    }
-
-                    fileSetPosition++;
-                }
+                writer.WriteLine("{0}:::{1}", nextLineBeginsAtOffset, currentFile);
             }
-
-            return false;
         }
 
         #endregion
 
+
+        //*******************************************************************
+        //      SUB-ACTIONS
+        //*******************************************************************
+
+        #region
+        
+        private void ActionAddLineToPayload(List<string> payloadStr, ref long payloadSizeByte, string nextLine, long nextlineSizeByte)
+        {
+            payloadStr.Add(nextLine);
+            payloadSizeByte += nextlineSizeByte;
+        }
+
+        private void ActionSkipLine(string nextLine, long nextlineSizeByte)
+        {
+            string auxMessage = $"{GoogleCloudPubSubLogShipper.CNST_Shipper_Error} Line skipped because it is bigger ({nextlineSizeByte}) than BatchSizeLimitBytes ({this._batchSizeLimitBytes.Value}).";
+            SelfLog.WriteLine(auxMessage);
+            this._state.Error(auxMessage);
+            this._state.DebugEventSkip(GoogleCloudPubSubLogShipper.CNST_Shipper_Debug, nextLine);
+            this.linesDroppedForCurrentFile++;
+        }
+
+        private void ActionMoveLineBackwards(ref bool continueAdding, ref long nextLineBeginsAtOffset, long previousBeginsAtOffset)
+        {
+            continueAdding = false;
+            nextLineBeginsAtOffset = previousBeginsAtOffset;
+        }
+
+        private void ActionMarkBatchSentOK(FileStream bookmark, long nextLineBeginsAtOffset, string currentFilePath, List<string> payloadStr)
+        {
+            GoogleCloudPubSubLogShipper.WriteBookmark(bookmark, nextLineBeginsAtOffset, currentFilePath);
+            this._connectionSchedule.MarkSuccess();
+            //---
+            this._state.Debug($"{GoogleCloudPubSubLogShipper.CNST_Shipper_Debug} OK sending data to PubSub.");
+            //---
+            this.linesSentOKForCurrentFile += payloadStr.Count;
+            this.batchesSentOKForCurrentFile++;
+        }
+
+        private void ActionMarkBatchSentERROR(string errorMessage, List<string> payloadStr)
+        {
+            this._connectionSchedule.MarkFailure();
+            //--
+            string auxMessage = $"{GoogleCloudPubSubLogShipper.CNST_Shipper_Error} ERROR sending data to PubSub. [{errorMessage}]";
+            SelfLog.WriteLine(auxMessage);
+            this._state.Error(auxMessage, payloadStr);
+            //---
+            this.linesSentERRORForCurrentFile += payloadStr.Count;
+            this.batchesSentERRORForCurrentFile++;
+        }
+
+        private void ActionMarkNoBatchButGoForward(FileStream bookmark, long nextLineBeginsAtOffset, string currentFilePath)
+        {
+            GoogleCloudPubSubLogShipper.WriteBookmark(bookmark, nextLineBeginsAtOffset, currentFilePath);
+            this._connectionSchedule.MarkSuccess();
+        }
+
+        private void ActionMarkNoBatchButSuccess()
+        {
+            this._connectionSchedule.MarkSuccess();
+        }
+
+        private bool ActionGoToNextBufferFileIfAny(FileStream bookmark, string currentFilePath, int currentFileSetPosition, long nextLineBeginsAtOffset, string[] fileSet)
+        {
+            int nextFileSetPosition = currentFileSetPosition + 1;
+            if (nextFileSetPosition < fileSet.Length && GoogleCloudPubSubLogShipper.IsUnlockedAtLength(currentFilePath, nextLineBeginsAtOffset, this._state))
+            {
+                // --- Move to next file --------------------------------------------------
+
+                try
+                {
+                    this._LogCurrentFile(currentFilePath);
+                    this._state.DebugFileAction($"{GoogleCloudPubSubLogShipper.CNST_Shipper_Debug} Move forward to next file. [{fileSet[nextFileSetPosition]}].");
+                }
+                catch (Exception)
+                {
+                }
+
+                GoogleCloudPubSubLogShipper.WriteBookmark(bookmark, 0, fileSet[nextFileSetPosition]);
+                //---
+                this.ActionInitializeCurrentFileCounters();
+                //---
+                return true; //We force to manage the new file immediately.
+            }
+            return false; //We continue with the same buffer file.
+        }
+
+        private void ActionInitializeCurrentFileCounters()
+        {
+            this.linesSentOKForCurrentFile = 0;
+            this.linesSentERRORForCurrentFile = 0;
+            this.linesDroppedForCurrentFile = 0;
+            this.overflowsForCurrentFile = 0;
+            this.batchesSentOKForCurrentFile = 0;
+            this.batchesSentERRORForCurrentFile = 0;
+        }
+
+        private void ActionDoRetainedFile(int currentFileSetPosition, string[] fileSet)
+        {
+            if (fileSet.Length > 1 && fileSet.Length > this._retainedFileCountLimit && currentFileSetPosition > 0)
+            {
+                this._state.DebugFileAction($"{GoogleCloudPubSubLogShipper.CNST_Shipper_Debug} File delete. [{fileSet[0]}].");
+                System.IO.File.Delete(fileSet[0]);
+            }
+        }
+
+        private void _LogCurrentFile(string currentFilePath)
+        {
+            string auxMessage = string.Format("{0} File finished: LinesOK=[{1}] LinesERROR=[{2}] LinesSkiped=[{3}] BatchesOK=[{4}] BatchesERROR=[{5}] Overflows=[{6}] File=[{7}]",
+                                              GoogleCloudPubSubLogShipper.CNST_Shipper_Debug,
+                                              this.linesSentOKForCurrentFile,
+                                              this.linesSentERRORForCurrentFile,
+                                              this.linesDroppedForCurrentFile,
+                                              this.batchesSentOKForCurrentFile,
+                                              this.batchesSentERRORForCurrentFile,
+                                              this.overflowsForCurrentFile,
+                                              currentFilePath
+                                              );
+            this._state.DebugFileAction(auxMessage);
+        }
+        #endregion
 
 
         //*******************************************************************

@@ -136,6 +136,11 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         public long? ErrorFileSizeLimitBytes { get; set; }
 
         /// <summary>
+        /// Rolling specifier: {Date}, {Hour} or {HalfHour}. The default one is {Date}.
+        /// </summary>
+        public string ErrorRollingSpecifier { get; set; }
+
+        /// <summary>
         /// If set to 'true' then events related to any error will be saved to the error file (after the error message).
         /// </summary>
         public bool ErrorStoreEvents { get; set; } = false;
@@ -230,6 +235,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             this.Period = TimeSpan.FromSeconds(2);
             this.MessageDataToBase64 = true;
             this.BufferRollingSpecifier = "{Hour}";
+            this.ErrorRollingSpecifier = "{Date}";
             this.BufferRetainedFileCountLimit = 31;
             this.ErrorRetainedFileCountLimit = 31;
         }
@@ -280,6 +286,7 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         /// <param name="bufferRollingSpecifier">Rolling specifier: {Date}, {Hour} or {HalfHour}. The default one is {Hour}.</param>
         /// <param name="errorRetainedFileCountLimit">The maximum number of error log files that will be retained, including the current error file. For unlimited retention, pass null. The default is 31.</param>
         /// <param name="debugStoreFileAction">If set to 'true' then all file actions (move forward, delete, ...) will me stored.</param>
+        /// <param name="errorRollingSpecifier">Rolling specifier: {Date}, {Hour} or {HalfHour}. The default one is {Date}.</param>
         public void SetValues(
             string bufferBaseFilename,
             long? bufferFileSizeLimitBytes = null,
@@ -301,7 +308,8 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             bool? debugStoreEventSkip = null,
             string bufferRollingSpecifier = null,
             int? errorRetainedFileCountLimit = null,
-            bool? debugStoreFileAction = null)
+            bool? debugStoreFileAction = null,
+            string errorRollingSpecifier = null)
         {
             this.BufferBaseFilename = bufferBaseFilename;
             this.ErrorBaseFilename = errorBaseFilename;
@@ -355,6 +363,9 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
             if (debugStoreFileAction != null)
                 this.DebugStoreFileAction = debugStoreFileAction.Value;
+
+            if (!string.IsNullOrEmpty(errorRollingSpecifier))
+                this.ErrorRollingSpecifier = errorRollingSpecifier;
 
             //---
 

@@ -66,6 +66,7 @@ namespace Serilog
         /// <param name="bufferRollingSpecifier">Rolling specifier: {Date}, {Hour} or {HalfHour}. The default one is {Hour}.</param>
         /// <param name="errorRetainedFileCountLimit">The maximum number of error log files that will be retained, including the current error file. For unlimited retention, pass null. The default is 31.</param>
         /// <param name="debugStoreFileAction">If set to 'true' then all file actions (move forward, delete, ...) will me stored.</param>
+        /// <param name="errorRollingSpecifier">Rolling specifier: {Date}, {Hour} or {HalfHour}. The default one is {Date}.</param>
         /// <returns>LoggerConfiguration object</returns>
         /// <exception cref="ArgumentNullException"><paramref name="projectId"/> is <see langword="null" />.</exception>
         /// <exception cref="ArgumentNullException"><paramref name="topicId"/> is <see langword="null" />.</exception>
@@ -94,7 +95,8 @@ namespace Serilog
             bool? debugStoreEventSkip = null,
             string bufferRollingSpecifier = null,
             int? errorRetainedFileCountLimit = null,
-            bool? debugStoreFileAction = null)
+            bool? debugStoreFileAction = null,
+            string errorRollingSpecifier = null)
         {
 
             //--- Creating an options object with the received parameters -------------
@@ -122,7 +124,8 @@ namespace Serilog
                 debugStoreEventSkip,
                 bufferRollingSpecifier,
                 errorRetainedFileCountLimit,
-                debugStoreFileAction);
+                debugStoreFileAction,
+                errorRollingSpecifier);
 
 
             //--- Mandatory parameters ------------
