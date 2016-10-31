@@ -190,6 +190,10 @@ By default just errors information is stored.
 The maximum size, in bytes, to which the error/debug file for the specifier will be allowed to grow.
 By default no limit will be applied.
 
+### ErrorRollingSpecifier
+Rolling specifier: {Date}, {Hour} or {HalfHour}.
+The default one is {Date}.
+
 ### ErrorStoreEvents
 If set to 'true' then events related to any error will be saved to the error file (after the error message).
 By default it is false.
@@ -200,6 +204,10 @@ By default it is false.
 
 ### DebugStoreEventSkip
 If set to 'true' then skiped events (greater than the BatchSizeLimitBytes) will be stored.
+By default it is false.
+
+### DebugStoreFileAction
+If set to 'true' then all file actions (move forward, delete, ...) will me stored.
 By default it is false.
 
 ### DebugStoreAll
@@ -290,6 +298,11 @@ Log.Information("This will be sent to Google PubSub");
 ```
 
 
+# Version History
+
+- 2.0.3
+Bug fix.
+New configuration options: ErrorRollingSpecifier and DebugStoreFileAction.
 
 
 
