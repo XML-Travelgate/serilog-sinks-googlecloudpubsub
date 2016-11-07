@@ -1,5 +1,5 @@
 {
-  "version": "2.0.3-*",
+  "version": "2.0.4-*",
   "description": "The Google Cloud Pub/Sub Sink for Serilog",
   "authors": ["Oscar Pérez, XMLTravelgate CTO"],
   "packOptions": {
@@ -17,7 +17,7 @@
         "Serilog": "2.3.0",
         "Serilog.Sinks.PeriodicBatching": "2.0.0",
         "Serilog.Sinks.RollingFile": "3.2.0",
-        "Google.Pubsub.V1": "1.0.0-beta02"
+        "Google.Pubsub.V1": "1.0.0-beta04"
       }
     },
     "net4.6": {
@@ -25,7 +25,7 @@
         "Serilog": "2.3.0",
         "Serilog.Sinks.PeriodicBatching": "2.0.0",
         "Serilog.Sinks.RollingFile": "3.2.0",
-        "Google.Pubsub.V1": "1.0.0-beta02"
+        "Google.Pubsub.V1": "1.0.0-beta04"
       }
     }
   }
