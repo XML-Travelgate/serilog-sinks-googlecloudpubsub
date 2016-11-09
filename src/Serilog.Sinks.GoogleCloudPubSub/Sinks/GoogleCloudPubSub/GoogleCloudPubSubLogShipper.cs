@@ -14,13 +14,18 @@
 
 using System;
 using System.Text;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using Serilog.Debugging;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+#if DOTNETCORE
+using System.Runtime.Loader;
+#endif
+#if NO_TIMER
+using Serilog.Sinks.GoogleCloudPubSub.CrossPlatform;
+#endif
 
 namespace Serilog.Sinks.GoogleCloudPubSub
 {
@@ -36,14 +41,18 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         readonly int _batchPostingLimit;
         readonly long? _batchSizeLimitBytes;
         readonly int? _retainedFileCountLimit;
-        readonly bool _isBuffered;
-        readonly Timer _timer;
         readonly ExponentialBackoffConnectionSchedule _connectionSchedule;
         readonly string _bookmarkFilename;
         readonly string _logFolder;
         readonly string _candidateSearchPath;
         readonly object _stateLock = new object();
         volatile bool _unloading;
+
+#if NO_TIMER
+        readonly PortableTimer _timer;
+#else
+        readonly Timer _timer;
+#endif
 
         private static string CNST_Shipper_Error = "Shipper [Error]: ";
         private static string CNST_Shipper_Debug = "Shipper [Debug]: ";
@@ -77,10 +86,18 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             this._logFolder = Path.GetDirectoryName(this._bookmarkFilename);
             this._candidateSearchPath = Path.GetFileName(this._state.Options.BufferBaseFilename) + "*" + this._state.Options.BufferFileExtension;
 
-            this._timer = new Timer(s => OnTick());
-            
+#if NO_TIMER
+            this._timer = new PortableTimer(cancel => OnTick());
+#else
+            this._timer = new Timer(s => OnTick(), null, -1, -1);
+#endif
+
+#if DOTNETCORE
+            System.Runtime.Loader.AssemblyLoadContext.Default.Unloading += OnAppDomainUnloading;
+#else
             AppDomain.CurrentDomain.DomainUnload += OnAppDomainUnloading;
-            AppDomain.CurrentDomain.ProcessExit += OnAppDomainUnloading;          
+            AppDomain.CurrentDomain.ProcessExit += OnAppDomainUnloading;    
+#endif
 
             SetTimer();
         }
@@ -92,10 +109,18 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         //*******************************************************************
 
         #region
-        void OnAppDomainUnloading(object sender, EventArgs args)
+
+#if DOTNETCORE
+        void OnAppDomainUnloading(AssemblyLoadContext assContext)
         {
             CloseAndFlush();
         }
+#else
+        void OnAppDomainUnloading(object sender, EventArgs args)
+        {
+            CloseAndFlush();
+        }  
+#endif
 
         void CloseAndFlush()
         {
@@ -107,12 +132,20 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                 this._unloading = true;
             }
 
+#if DOTNETCORE
+            System.Runtime.Loader.AssemblyLoadContext.Default.Unloading -= OnAppDomainUnloading;
+#else
             AppDomain.CurrentDomain.DomainUnload -= OnAppDomainUnloading;
-            AppDomain.CurrentDomain.ProcessExit -= OnAppDomainUnloading;
+            AppDomain.CurrentDomain.ProcessExit -= OnAppDomainUnloading;    
+#endif
 
+#if NO_TIMER
+            this._timer.Dispose();
+#else
             var wh = new ManualResetEvent(false);
             if (this._timer.Dispose(wh))
                 wh.WaitOne();
+#endif
 
             OnTick();
         }
@@ -121,7 +154,11 @@ namespace Serilog.Sinks.GoogleCloudPubSub
         {
             // Note, called under _stateLock
             var infiniteTimespan = Timeout.InfiniteTimeSpan;
+#if NO_TIMER
+            this._timer.Start(_connectionSchedule.NextInterval);
+#else
             this._timer.Change(this._connectionSchedule.NextInterval, infiniteTimespan);
+#endif
         }
         #endregion
 

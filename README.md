@@ -300,6 +300,9 @@ Log.Information("This will be sent to Google PubSub");
 
 # Version History
 
+- 2.0.4 (dev)
+Support for NetStandard.
+
 - 2.0.3
 Bug fix.
 New configuration options: ErrorRollingSpecifier and DebugStoreFileAction.
