@@ -300,8 +300,11 @@ Log.Information("This will be sent to Google PubSub");
 
 # Version History
 
+- 2.0.5  
+If the Error/Debug file is enabled then it is registered the 'Dispose' action. 
+
 - 2.0.4  
-Support for NetStandard.
+Support for NetStandard.  
 New configuration option: ErrorRetainedFileCountLimit.
 
 - 2.0.3  

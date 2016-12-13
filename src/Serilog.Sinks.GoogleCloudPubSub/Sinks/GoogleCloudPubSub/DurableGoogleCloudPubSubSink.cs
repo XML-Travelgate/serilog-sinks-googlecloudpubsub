@@ -300,14 +300,15 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                 this._dataRollingFileSink.Dispose();
             }
 
-            if (this._errorsRollingFileSink != null)
-            {
-                this._errorsRollingFileSink.Dispose();
-            }
-
             if (this._shipper != null)
             {
                 this._shipper.Dispose();
+            }
+
+            // The errors file has to be the last one to dispose as we are using it for internal logging.
+            if (this._errorsRollingFileSink != null)
+            {
+                this._errorsRollingFileSink.Dispose();
             }
         }
         #endregion

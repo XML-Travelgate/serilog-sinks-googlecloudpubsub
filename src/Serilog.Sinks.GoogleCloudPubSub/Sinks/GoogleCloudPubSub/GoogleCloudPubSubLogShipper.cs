@@ -92,12 +92,12 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             this._timer = new Timer(s => OnTick(), null, -1, -1);
 #endif
 
-#if DOTNETCORE
-            System.Runtime.Loader.AssemblyLoadContext.Default.Unloading += OnAppDomainUnloading;
-#else
-            AppDomain.CurrentDomain.DomainUnload += OnAppDomainUnloading;
-            AppDomain.CurrentDomain.ProcessExit += OnAppDomainUnloading;    
-#endif
+//#if DOTNETCORE
+//            System.Runtime.Loader.AssemblyLoadContext.Default.Unloading += OnAppDomainUnloading;
+//#else
+//            AppDomain.CurrentDomain.DomainUnload += OnAppDomainUnloading;
+//            AppDomain.CurrentDomain.ProcessExit += OnAppDomainUnloading;    
+//#endif
 
             SetTimer();
         }
@@ -110,17 +110,17 @@ namespace Serilog.Sinks.GoogleCloudPubSub
 
         #region
 
-#if DOTNETCORE
-        void OnAppDomainUnloading(AssemblyLoadContext assContext)
-        {
-            CloseAndFlush();
-        }
-#else
-        void OnAppDomainUnloading(object sender, EventArgs args)
-        {
-            CloseAndFlush();
-        }  
-#endif
+//#if DOTNETCORE
+//        void OnAppDomainUnloading(AssemblyLoadContext assContext)
+//        {
+//            CloseAndFlush();
+//        }
+//#else
+//        void OnAppDomainUnloading(object sender, EventArgs args)
+//        {
+//            CloseAndFlush();
+//        }  
+//#endif
 
         void CloseAndFlush()
         {
@@ -132,12 +132,12 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                 this._unloading = true;
             }
 
-#if DOTNETCORE
-            System.Runtime.Loader.AssemblyLoadContext.Default.Unloading -= OnAppDomainUnloading;
-#else
-            AppDomain.CurrentDomain.DomainUnload -= OnAppDomainUnloading;
-            AppDomain.CurrentDomain.ProcessExit -= OnAppDomainUnloading;    
-#endif
+//#if DOTNETCORE
+//            System.Runtime.Loader.AssemblyLoadContext.Default.Unloading -= OnAppDomainUnloading;
+//#else
+//            AppDomain.CurrentDomain.DomainUnload -= OnAppDomainUnloading;
+//            AppDomain.CurrentDomain.ProcessExit -= OnAppDomainUnloading;    
+//#endif
 
 #if NO_TIMER
             this._timer.Dispose();
@@ -147,8 +147,13 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                 wh.WaitOne();
 #endif
 
+            this._state.DebugFileAction($"{GoogleCloudPubSubLogShipper.CNST_Shipper_Debug} ******** Launching OnTick() for CloseAndFlush ... ******** ");
+            //---------------------
             OnTick();
+            //---------------------
+            this._state.DebugFileAction($"{GoogleCloudPubSubLogShipper.CNST_Shipper_Debug} ******** CloseAndFlush FINISHED ******** ");
         }
+
 
         void SetTimer()
         {
@@ -364,13 +369,18 @@ namespace Serilog.Sinks.GoogleCloudPubSub
                         //  ...because we have reached the posting limit.
                         //  ...because we have reached the size limit.
                         //  ...because we have changed to a new buffer file.
+                        //  ...because there are more buffer files to process.
                         // If we go forward with current file but it hasn't got more lines then nothing wrong happens: next iteration will
                         // dtect that it hasn't got more information and it will produce to look for a next buffer file.
-                        continueWhile = ((payloadStr.Count == this._batchPostingLimit || isSizeLimitOverflow) && currentBufferFileHasMoreLines) || bufferFileChanged;
+                        continueWhile = ((payloadStr.Count == this._batchPostingLimit || isSizeLimitOverflow) && currentBufferFileHasMoreLines) ||
+                                        bufferFileChanged ||
+                                        this.ActionFileSetHasMoreFiles(currentFileSetPosition, fileSet);
 
                     }
+
                 }
                 while (continueWhile);
+
 
             }
             catch (Exception ex)
@@ -641,6 +651,11 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             this.batchesSentERRORForCurrentFile = 0;
         }
 
+        private bool ActionFileSetHasMoreFiles(int currentFileSetPosition, string[] fileSet)
+        {
+            return !(fileSet == null || currentFileSetPosition >= (fileSet.Count() - 1));
+        }
+
         private void ActionDoRetainedFile(int currentFileSetPosition, string[] fileSet)
         {
             if (fileSet.Length > 1 && fileSet.Length > this._retainedFileCountLimit && currentFileSetPosition > 0)
@@ -665,6 +680,9 @@ namespace Serilog.Sinks.GoogleCloudPubSub
             this._state.DebugFileAction(auxMessage);
         }
         #endregion
+
+
+
 
 
         //*******************************************************************

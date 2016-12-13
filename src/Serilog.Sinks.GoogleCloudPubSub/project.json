@@ -1,5 +1,5 @@
 {
-  "version": "2.0.4",
+  "version": "2.0.5",
   "description": "The Google Cloud Pub/Sub Sink for Serilog",
   "authors": [ "Oscar Pérez, XMLTravelgate CTO" ],
   "packOptions": {
